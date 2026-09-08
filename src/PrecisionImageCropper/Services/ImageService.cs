@@ -15,21 +15,21 @@ public static class ImageService
         if (!Extensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
             throw new NotSupportedException("This file type is not supported. Choose JPG, PNG, BMP, or TIFF.");
 
-        // OnLoad releases the source file immediately; Rotation applies the common camera EXIF orientations
-        // before both preview and final crop use the same bitmap.
-        var rotation = ReadExifRotation(path);
+        // OnLoad releases the source file immediately. Orientation is materialized before both
+        // preview and final crop use the same, correctly oriented pixel coordinate system.
+        var orientation = ReadExifOrientation(path);
         var image = new BitmapImage();
         image.BeginInit();
         image.UriSource = new Uri(path, UriKind.Absolute);
         image.CacheOption = BitmapCacheOption.OnLoad;
         image.CreateOptions = BitmapCreateOptions.PreservePixelFormat;
-        image.Rotation = rotation;
         image.EndInit();
         image.Freeze();
-        return new LoadedImage(image, path, image.PixelWidth, image.PixelHeight);
+        var oriented = Orient(image, orientation);
+        return new LoadedImage(oriented, path, oriented.PixelWidth, oriented.PixelHeight);
     }
 
-    private static Rotation ReadExifRotation(string path)
+    private static ushort ReadExifOrientation(string path)
     {
         try
         {
@@ -37,16 +37,46 @@ public static class ImageService
             var frame = BitmapFrame.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
             if (frame.Metadata is BitmapMetadata metadata && metadata.GetQuery("/app1/ifd/{ushort=274}") is not null)
             {
-                return Convert.ToUInt16(metadata.GetQuery("/app1/ifd/{ushort=274}")) switch
-                {
-                    3 => Rotation.Rotate180,
-                    6 => Rotation.Rotate90,
-                    8 => Rotation.Rotate270,
-                    _ => Rotation.Rotate0
-                };
+                return Convert.ToUInt16(metadata.GetQuery("/app1/ifd/{ushort=274}"));
             }
         }
         catch { /* WPF will provide the user-facing decode error if the file is corrupt. */ }
-        return Rotation.Rotate0;
+        return 1;
+    }
+
+    private static BitmapSource Orient(BitmapSource source, ushort orientation)
+    {
+        if (orientation is < 2 or > 8) return source;
+        var width = source.PixelWidth;
+        var height = source.PixelHeight;
+        var sourceStride = width * 4;
+        var sourcePixels = new byte[sourceStride * height];
+        var converted = new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
+        converted.CopyPixels(sourcePixels, sourceStride, 0);
+        var swapDimensions = orientation is 5 or 6 or 7 or 8;
+        var outputWidth = swapDimensions ? height : width;
+        var outputHeight = swapDimensions ? width : height;
+        var outputStride = outputWidth * 4;
+        var outputPixels = new byte[outputStride * outputHeight];
+        for (var y = 0; y < outputHeight; y++)
+        for (var x = 0; x < outputWidth; x++)
+        {
+            var (sx, sy) = orientation switch
+            {
+                2 => (width - 1 - x, y),
+                3 => (width - 1 - x, height - 1 - y),
+                4 => (x, height - 1 - y),
+                5 => (y, x),
+                6 => (y, height - 1 - x),
+                7 => (width - 1 - y, height - 1 - x),
+                8 => (width - 1 - y, x),
+                _ => (x, y)
+            };
+            Buffer.BlockCopy(sourcePixels, sy * sourceStride + sx * 4, outputPixels, y * outputStride + x * 4, 4);
+        }
+        var result = new WriteableBitmap(outputWidth, outputHeight, source.DpiX, source.DpiY, PixelFormats.Bgra32, null);
+        result.WritePixels(new System.Windows.Int32Rect(0, 0, outputWidth, outputHeight), outputPixels, outputStride, 0);
+        result.Freeze();
+        return result;
     }
 }
