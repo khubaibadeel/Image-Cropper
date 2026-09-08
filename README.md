@@ -22,4 +22,4 @@ dotnet test
 dotnet publish src/PrecisionImageCropper/PrecisionImageCropper.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
 ```
 
-Supported input types are JPG, PNG, BMP, and TIFF. PNG output retains transparency. JPEG quality is set to 95. The original image is always read-only; Save As creates a separate output file.
+Supported input types are JPG, PNG, BMP, and TIFF. PNG output retains transparency. JPEG quality is user-adjustable and defaults to 95. The original image is always read-only; Save As creates a separate output file.

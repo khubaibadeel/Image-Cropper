@@ -25,6 +25,18 @@ public sealed class CoordinateConverterTests
     }
 
     [Fact]
+    public void Zoom_changes_only_display_geometry()
+    {
+        var crop = new CropRect(500, 250, 1000, 750);
+        var atFit = CoordinateConverter.ImageToDisplay(crop, .2);
+        var atTwoHundred = CoordinateConverter.ImageToDisplay(crop, 2);
+        Assert.Equal(100, atFit.X); Assert.Equal(50, atFit.Y);
+        Assert.Equal(1000, atTwoHundred.X); Assert.Equal(500, atTwoHundred.Y);
+        Assert.Equal(500, crop.X); Assert.Equal(250, crop.Y);
+        Assert.Equal(1000, crop.Width); Assert.Equal(750, crop.Height);
+    }
+
+    [Fact]
     public void Clamp_keeps_crop_inside_all_boundaries()
     {
         var crop = CropMath.Clamp(new CropRect(-20, 700, 500, 500), 1000, 1000);

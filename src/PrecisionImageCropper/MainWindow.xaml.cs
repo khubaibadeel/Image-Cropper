@@ -145,7 +145,9 @@ public partial class MainWindow : Window
         try
         {
             BusyIndicator.Visibility = Visibility.Visible; CropSaveButton.IsEnabled = false;
-            var crop = _viewModel.Crop; await Task.Run(() => CropService.Save(_source, crop, path, 95));
+            var crop = _viewModel.Crop;
+            var quality = TryNumber(QualityBox.Text, out var requestedQuality) ? (int)Math.Round(requestedQuality) : 95;
+            await Task.Run(() => CropService.Save(_source, crop, path, quality));
             var saved = CropMath.ToPixelRect(crop, _source.PixelWidth, _source.PixelHeight);
             MessageBox.Show(this, $"Saved {saved.Width} × {saved.Height} pixel crop.", Title, MessageBoxButton.OK, MessageBoxImage.Information);
         }
