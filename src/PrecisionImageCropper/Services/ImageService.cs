@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
@@ -9,10 +10,13 @@ public static class ImageService
 {
     private static readonly string[] Extensions = [".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"];
 
+    public static bool IsSupportedFile(string path) =>
+        Extensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
+
     public static LoadedImage Load(string path)
     {
         if (!File.Exists(path)) throw new FileNotFoundException("The selected image could not be found.", path);
-        if (!Extensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
+        if (!IsSupportedFile(path))
             throw new NotSupportedException("This file type is not supported. Choose JPG, PNG, BMP, or TIFF.");
 
         // OnLoad releases the source file immediately. Orientation is materialized before both
@@ -27,6 +31,15 @@ public static class ImageService
         image.Freeze();
         var oriented = Orient(image, orientation);
         return new LoadedImage(oriented, path, oriented.PixelWidth, oriented.PixelHeight);
+    }
+
+    public static BitmapSource CopyBitmap(BitmapSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        var copy = source.Clone();
+        copy.Freeze();
+        return copy;
     }
 
     private static ushort ReadExifOrientation(string path)

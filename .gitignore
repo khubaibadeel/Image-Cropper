@@ -1,0 +1,14 @@
+# .NET generated files
+**/bin/
+**/obj/
+
+# Published executable
+dist/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Test output
+TestResults/
