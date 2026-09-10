@@ -1,0 +1,25 @@
+Review the current PrecisionImageCropper project after the new batch-workspace implementation.
+
+Do NOT redesign or rewrite working functionality.
+
+Audit specifically for:
+
+1. memory usage with 20–50 large images
+2. whether thumbnails are used instead of permanently retaining every full-resolution bitmap
+3. duplicate detection correctness
+4. independent edit state per BatchImageItem
+5. accidental use of one global image/crop state for all cards
+6. UI-thread blocking
+7. regressions in the existing crop math and source-pixel coordinate system
+8. startup initialization issues
+9. existing clipboard functionality
+10. build warnings/errors
+
+Run:
+
+dotnet build
+dotnet test
+
+Fix concrete defects you discover, but do not add Phase 2 features yet.
+
+At the end tell me exactly what you inspected and changed.
