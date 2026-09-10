@@ -5,6 +5,19 @@ namespace PrecisionImageCropper.Services;
 
 public static class FileDialogService
 {
+    public static string[]? OpenImages(string? initialDirectory)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Open Images",
+            InitialDirectory = initialDirectory,
+            Multiselect = true,
+            Filter = "Image files|*.jpg;*.jpeg;*.png;*.bmp;*.tif;*.tiff|JPEG image|*.jpg;*.jpeg|PNG image|*.png|Bitmap image|*.bmp|TIFF image|*.tif;*.tiff"
+        };
+
+        return dialog.ShowDialog() == true ? dialog.FileNames : null;
+    }
+
     public static string? OpenImage(string? initialDirectory)
     {
         var dialog = new OpenFileDialog

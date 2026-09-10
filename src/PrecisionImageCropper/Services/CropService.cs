@@ -14,6 +14,18 @@ namespace PrecisionImageCropper.Services
             string outputPath,
             int jpegQuality)
         {
+            Save(source, crop, outputPath, jpegQuality, 0, false, false);
+        }
+
+        public static void Save(
+            BitmapSource source,
+            CropRect crop,
+            string outputPath,
+            int jpegQuality,
+            int netRotation,
+            bool horizontalFlip,
+            bool verticalFlip)
+        {
             if (source == null)
                 throw new ArgumentNullException(nameof(source));
 
@@ -24,52 +36,6 @@ namespace PrecisionImageCropper.Services
                 throw new ArgumentException(
                     "Output path cannot be empty.",
                     nameof(outputPath));
-
-            int sourceWidth = source.PixelWidth;
-            int sourceHeight = source.PixelHeight;
-
-            // Convert crop coordinates to integer source-image pixels.
-            int x = (int)Math.Round(crop.X);
-            int y = (int)Math.Round(crop.Y);
-            int width = (int)Math.Round(crop.Width);
-            int height = (int)Math.Round(crop.Height);
-
-            // Keep X and Y inside the source image.
-            x = Math.Clamp(x, 0, Math.Max(0, sourceWidth - 1));
-            y = Math.Clamp(y, 0, Math.Max(0, sourceHeight - 1));
-
-            // Minimum crop size = 1 pixel.
-            width = Math.Max(1, width);
-            height = Math.Max(1, height);
-
-            // Prevent crop from extending outside image.
-            if (x + width > sourceWidth)
-            {
-                width = sourceWidth - x;
-            }
-
-            if (y + height > sourceHeight)
-            {
-                height = sourceHeight - y;
-            }
-
-            if (width <= 0 || height <= 0)
-            {
-                throw new InvalidOperationException(
-                    "The crop rectangle is outside the image bounds.");
-            }
-
-            var pixelRect = new Int32Rect(
-                x,
-                y,
-                width,
-                height);
-
-            var croppedBitmap = new CroppedBitmap(
-                source,
-                pixelRect);
-
-            croppedBitmap.Freeze();
 
             string extension =
                 Path.GetExtension(outputPath).ToLowerInvariant();
@@ -104,8 +70,7 @@ namespace PrecisionImageCropper.Services
                         "The output file extension must be JPG, JPEG, PNG, BMP, TIF, or TIFF.");
             }
 
-            encoder.Frames.Add(
-                BitmapFrame.Create(croppedBitmap));
+            encoder.Frames.Add(BitmapFrame.Create(Render(source, crop, netRotation, horizontalFlip, verticalFlip)));
 
             using FileStream output = new FileStream(
                 outputPath,
@@ -114,6 +79,49 @@ namespace PrecisionImageCropper.Services
                 FileShare.None);
 
             encoder.Save(output);
+        }
+
+        /// <summary>
+        /// Uses the same source-pixel crop rectangle as Save and applies the
+        /// independent batch edit state without mutating the source bitmap.
+        /// </summary>
+        public static BitmapSource Render(
+            BitmapSource source,
+            CropRect crop,
+            int netRotation = 0,
+            bool horizontalFlip = false,
+            bool verticalFlip = false)
+        {
+            if (source is null) throw new ArgumentNullException(nameof(source));
+            if (crop is null) throw new ArgumentNullException(nameof(crop));
+
+            var sourceWidth = source.PixelWidth;
+            var sourceHeight = source.PixelHeight;
+            var x = Math.Clamp((int)Math.Round(crop.X), 0, Math.Max(0, sourceWidth - 1));
+            var y = Math.Clamp((int)Math.Round(crop.Y), 0, Math.Max(0, sourceHeight - 1));
+            var width = Math.Max(1, (int)Math.Round(crop.Width));
+            var height = Math.Max(1, (int)Math.Round(crop.Height));
+            width = Math.Min(width, sourceWidth - x);
+            height = Math.Min(height, sourceHeight - y);
+            if (width <= 0 || height <= 0)
+                throw new InvalidOperationException("The crop rectangle is outside the image bounds.");
+
+            var cropped = new CroppedBitmap(source, new Int32Rect(x, y, width, height));
+            cropped.Freeze();
+            var normalizedRotation = ((netRotation % 360) + 360) % 360;
+            if (normalizedRotation is not (0 or 90 or 180 or 270))
+                throw new ArgumentOutOfRangeException(nameof(netRotation));
+            if (!horizontalFlip && !verticalFlip && normalizedRotation == 0)
+                return cropped;
+
+            var transform = new System.Windows.Media.TransformGroup();
+            if (horizontalFlip || verticalFlip)
+                transform.Children.Add(new System.Windows.Media.ScaleTransform(horizontalFlip ? -1 : 1, verticalFlip ? -1 : 1));
+            if (normalizedRotation != 0)
+                transform.Children.Add(new System.Windows.Media.RotateTransform(normalizedRotation));
+            var rendered = new TransformedBitmap(cropped, transform);
+            rendered.Freeze();
+            return rendered;
         }
     }
 }

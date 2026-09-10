@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using PrecisionImageCropper.Models;
 
 namespace PrecisionImageCropper.Services;
 
@@ -31,6 +32,56 @@ public static class ImageService
         image.Freeze();
         var oriented = Orient(image, orientation);
         return new LoadedImage(oriented, path, oriented.PixelWidth, oriented.PixelHeight);
+    }
+
+    /// <summary>Reads only image headers and EXIF orientation, without retaining decoded pixels.</summary>
+    public static ImageFileInfo ReadInfo(string path)
+    {
+        if (!File.Exists(path)) throw new FileNotFoundException("The selected image could not be found.", path);
+        if (!IsSupportedFile(path))
+            throw new NotSupportedException("This file type is not supported. Choose JPG, PNG, BMP, or TIFF.");
+
+        using var stream = File.OpenRead(path);
+        var frame = BitmapFrame.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
+        var orientation = ReadExifOrientation(path);
+        var swapsDimensions = orientation is 5 or 6 or 7 or 8;
+        return swapsDimensions
+            ? new ImageFileInfo(frame.PixelHeight, frame.PixelWidth)
+            : new ImageFileInfo(frame.PixelWidth, frame.PixelHeight);
+    }
+
+    /// <summary>Returns a frozen, bounded preview suitable for queue cards.</summary>
+    public static BitmapSource LoadThumbnail(string path, int maximumDimension = 360)
+    {
+        if (maximumDimension < 1) throw new ArgumentOutOfRangeException(nameof(maximumDimension));
+
+        var info = ReadInfo(path);
+        var image = new BitmapImage();
+        image.BeginInit();
+        image.UriSource = new Uri(path, UriKind.Absolute);
+        image.CacheOption = BitmapCacheOption.OnLoad;
+        image.CreateOptions = BitmapCreateOptions.PreservePixelFormat;
+        if (info.Width >= info.Height)
+            image.DecodePixelWidth = maximumDimension;
+        else
+            image.DecodePixelHeight = maximumDimension;
+        image.EndInit();
+        image.Freeze();
+
+        return Orient(image, ReadExifOrientation(path));
+    }
+
+    public static string SaveClipboardImageToTemporaryFile(BitmapSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        var folder = Path.Combine(Path.GetTempPath(), "PrecisionImageCropper");
+        Directory.CreateDirectory(folder);
+        var path = Path.Combine(folder, $"clipboard-{Guid.NewGuid():N}.png");
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(source));
+        using var output = File.Create(path);
+        encoder.Save(output);
+        return path;
     }
 
     public static BitmapSource CopyBitmap(BitmapSource source)
