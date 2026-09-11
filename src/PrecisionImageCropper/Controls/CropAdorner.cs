@@ -89,14 +89,15 @@ public sealed class CropAdorner : FrameworkElement
         e.Handled = true;
     }
 
-    public void CancelOperation()
+    public bool CancelOperation()
     {
-        if (_mode == DragMode.None) return;
+        if (_mode == DragMode.None) return false;
         _mode = DragMode.None;
         _crop = _startCrop.Clone();
         ReleaseMouseCapture();
         InvalidateVisual();
         CropChanged?.Invoke(this, _crop.Clone());
+        return true;
     }
 
     private CropRect CreateAt(Point point)
@@ -149,13 +150,33 @@ public sealed class CropAdorner : FrameworkElement
         double anchorY = fromTop ? _startCrop.Y + _startCrop.Height : _startCrop.Y;
         double sx = fromLeft ? -1 : 1;
         double sy = fromTop ? -1 : 1;
-        double requestedW = horizontalOnly ? Math.Abs(_startCrop.Width + (fromLeft ? -dx : dx)) : verticalOnly ? Math.Abs(_startCrop.Height + (fromTop ? -dy : dy)) * ratio : Math.Abs(dx);
-        double requestedH = horizontalOnly ? requestedW / ratio : verticalOnly ? requestedW / ratio : Math.Abs(dy);
-        double width = horizontalOnly ? requestedW : verticalOnly ? requestedH * ratio : Math.Min(requestedW, requestedH * ratio);
-        width = Math.Max(CropMath.MinSize, width);
+
+        double currentW = Math.Max(CropMath.MinSize, _startCrop.Width + (fromLeft ? -dx : dx));
+        double currentH = Math.Max(CropMath.MinSize, _startCrop.Height + (fromTop ? -dy : dy));
+
+        double requestedW;
+        if (horizontalOnly)
+        {
+            requestedW = currentW;
+        }
+        else if (verticalOnly)
+        {
+            requestedW = currentH * ratio;
+        }
+        else
+        {
+            // Corner drag: follow the axis with the larger movement relative to ratio
+            if (Math.Abs(dx) >= Math.Abs(dy) * ratio)
+                requestedW = currentW;
+            else
+                requestedW = currentH * ratio;
+        }
+
+        double width = Math.Max(CropMath.MinSize, requestedW);
         var maxW = sx > 0 ? _sourceWidth - anchorX : anchorX;
         var maxH = sy > 0 ? _sourceHeight - anchorY : anchorY;
         width = Math.Min(width, Math.Min(maxW, maxH * ratio));
+        width = Math.Max(CropMath.MinSize, width);
         var height = width / ratio;
         var x = sx > 0 ? anchorX : anchorX - width;
         var y = sy > 0 ? anchorY : anchorY - height;

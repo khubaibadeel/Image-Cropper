@@ -14,9 +14,15 @@ public static class OutputFileNameService
         bool verticalFlip)
     {
         var stem = Path.GetFileNameWithoutExtension(originalFileName);
+        if (string.IsNullOrWhiteSpace(stem))
+            stem = "image";
+
         var extension = string.IsNullOrWhiteSpace(originalExtension)
             ? Path.GetExtension(originalFileName)
             : originalExtension;
+        if (!string.IsNullOrWhiteSpace(extension) && !extension.StartsWith('.'))
+            extension = "." + extension;
+
         var suffixes = new List<string>();
 
         if (hasCrop)

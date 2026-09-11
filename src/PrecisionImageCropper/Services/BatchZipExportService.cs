@@ -35,6 +35,9 @@ public static class BatchZipExportService
         if (string.IsNullOrWhiteSpace(outputPath)) throw new ArgumentException("The ZIP output path cannot be empty.", nameof(outputPath));
 
         var destination = Path.GetFullPath(outputPath);
+        if (items.Any(i => CropService.IsOriginalSourcePath(i.OriginalFilePath, destination) || CropService.IsOriginalSourcePath(i.SourceDataPath, destination)))
+            throw new InvalidOperationException(CropService.CannotOverwriteOriginalMessage);
+
         var directory = Path.GetDirectoryName(destination) ?? throw new InvalidOperationException("The ZIP output folder is invalid.");
         Directory.CreateDirectory(directory);
         var temporaryPath = Path.Combine(directory, $".{Path.GetFileName(destination)}.{Guid.NewGuid():N}.tmp");

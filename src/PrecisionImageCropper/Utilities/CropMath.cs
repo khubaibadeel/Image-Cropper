@@ -36,7 +36,19 @@ public static class CropMath
         if (ratio <= 0) return Clamp(crop, imageWidth, imageHeight);
         var width = Math.Min(crop.Width, crop.Height * ratio);
         var height = width / ratio;
-        if (width < MinSize || height < MinSize) { width = Math.Max(MinSize, width); height = width / ratio; }
+        if (width < MinSize || height < MinSize)
+        {
+            if (ratio >= 1)
+            {
+                height = MinSize;
+                width = height * ratio;
+            }
+            else
+            {
+                width = MinSize;
+                height = width / ratio;
+            }
+        }
         if (width > imageWidth) { width = imageWidth; height = width / ratio; }
         if (height > imageHeight) { height = imageHeight; width = height * ratio; }
         crop.Width = width; crop.Height = height;

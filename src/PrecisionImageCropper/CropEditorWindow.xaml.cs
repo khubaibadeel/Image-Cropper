@@ -14,6 +14,7 @@ public partial class CropEditorWindow : Window
 {
     private readonly ObservableCollection<BatchImageItem> _items;
     private readonly Func<BatchImageItem, Task> _refreshThumbnailAsync;
+    private readonly Action<BatchImageItem>? _onItemSelected;
     private BatchImageItem _item;
     private CropRect _draftCrop = new();
     private CropRect _openedCrop = new();
@@ -27,12 +28,14 @@ public partial class CropEditorWindow : Window
         Window owner,
         ObservableCollection<BatchImageItem> items,
         BatchImageItem item,
-        Func<BatchImageItem, Task> refreshThumbnailAsync)
+        Func<BatchImageItem, Task> refreshThumbnailAsync,
+        Action<BatchImageItem>? onItemSelected = null)
     {
         Owner = owner;
         _items = items;
         _item = item;
         _refreshThumbnailAsync = refreshThumbnailAsync;
+        _onItemSelected = onItemSelected;
         InitializeComponent();
         Loaded += async (_, _) => await LoadItemAsync(_item);
         PreviewKeyDown += CropEditorWindow_PreviewKeyDown;
@@ -41,6 +44,7 @@ public partial class CropEditorWindow : Window
     private async Task LoadItemAsync(BatchImageItem item)
     {
         _item = item;
+        _onItemSelected?.Invoke(item);
         _openedCrop = item.CropRectangle;
         _draftCrop = _openedCrop.Clone();
         _openedAspectRatio = item.SelectedAspectRatio;
@@ -148,7 +152,14 @@ public partial class CropEditorWindow : Window
     private void NumericField_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter) return;
-        CommitNumericField(sender as TextBox);
+        if (ReferenceEquals(sender, CustomWidthBox) || ReferenceEquals(sender, CustomHeightBox))
+        {
+            CustomRatio_LostFocus(sender, e);
+        }
+        else
+        {
+            CommitNumericField(sender as TextBox);
+        }
         e.Handled = true;
     }
 
@@ -165,12 +176,28 @@ public partial class CropEditorWindow : Window
         switch (property)
         {
             case "Width":
-                crop.Width = value;
-                if (ratio is > 0) crop.Height = value / ratio.Value;
+                if (ratio is > 0)
+                {
+                    var maxW = Math.Min(_item.OriginalWidth, _item.OriginalHeight * ratio.Value);
+                    crop.Width = Math.Clamp(value, CropMath.MinSize, maxW);
+                    crop.Height = crop.Width / ratio.Value;
+                }
+                else
+                {
+                    crop.Width = value;
+                }
                 break;
             case "Height":
-                crop.Height = value;
-                if (ratio is > 0) crop.Width = value * ratio.Value;
+                if (ratio is > 0)
+                {
+                    var maxH = Math.Min(_item.OriginalHeight, _item.OriginalWidth / ratio.Value);
+                    crop.Height = Math.Clamp(value, CropMath.MinSize, maxH);
+                    crop.Width = crop.Height * ratio.Value;
+                }
+                else
+                {
+                    crop.Height = value;
+                }
                 break;
             case "X": crop.X = value; break;
             case "Y": crop.Y = value; break;
