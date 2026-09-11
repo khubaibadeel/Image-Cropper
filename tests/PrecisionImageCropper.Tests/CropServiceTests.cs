@@ -1,4 +1,4 @@
-﻿using System.Windows.Media;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using PrecisionImageCropper.Models;
 using PrecisionImageCropper.Services;
@@ -89,6 +89,39 @@ public sealed class CropServiceTests
         Assert.Equal(0, outPixels[2]);   // R of left pixel
         Assert.Equal(0, outPixels[4]);   // B of right pixel
         Assert.Equal(255, outPixels[6]); // R of right pixel
+    }
+
+    [Fact]
+    public void ImageService_ReadInfo_and_LoadThumbnail_do_not_lock_file()
+    {
+        var tempFile = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"test-image-{Guid.NewGuid():N}.png");
+        try
+        {
+            var bitmap = CreateTestBitmap(400, 200);
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            using (var fs = System.IO.File.Create(tempFile))
+            {
+                encoder.Save(fs);
+            }
+
+            var info = ImageService.ReadInfo(tempFile);
+            Assert.Equal(400, info.Width);
+            Assert.Equal(200, info.Height);
+
+            var thumb = ImageService.LoadThumbnail(tempFile, 360);
+            Assert.True(thumb.PixelWidth <= 360);
+            Assert.True(thumb.PixelHeight <= 360);
+
+            // Verify file is not locked by opening with exclusive write access
+            using var writeCheck = System.IO.File.Open(tempFile, System.IO.FileMode.Open, System.IO.FileAccess.ReadWrite, System.IO.FileShare.None);
+            Assert.True(writeCheck.CanWrite);
+        }
+        finally
+        {
+            if (System.IO.File.Exists(tempFile))
+                System.IO.File.Delete(tempFile);
+        }
     }
 
     private static BitmapSource CreateTestBitmap(int width, int height)
