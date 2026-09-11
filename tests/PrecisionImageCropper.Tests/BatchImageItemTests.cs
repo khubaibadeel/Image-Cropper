@@ -56,6 +56,45 @@ public sealed class BatchImageItemTests
         Assert.Null(vm.SelectedBatchItem);
     }
 
+    [Fact]
+    public void Crop_recipes_persist_independently_for_multiple_batch_images()
+    {
+        var first = CreateItem("one-to-one.jpg", 2400, 1600);
+        var second = CreateItem("freeform.jpg", 3000, 2000);
+        var third = CreateItem("widescreen.jpg", 3200, 2400);
+
+        first.CropRectangle = new CropRect(400, 0, 1600, 1600);
+        first.SelectedAspectRatio = "1:1";
+        second.CropRectangle = new CropRect(110, 230, 1820, 970);
+        second.SelectedAspectRatio = "FreeForm";
+        third.CropRectangle = new CropRect(160, 300, 2880, 1620);
+        third.SelectedAspectRatio = "16:9";
+
+        AssertCrop(first.CropRectangle, 400, 0, 1600, 1600);
+        Assert.Equal("1:1", first.SelectedAspectRatio);
+        AssertCrop(second.CropRectangle, 110, 230, 1820, 970);
+        Assert.Equal("FreeForm", second.SelectedAspectRatio);
+        AssertCrop(third.CropRectangle, 160, 300, 2880, 1620);
+        Assert.Equal("16:9", third.SelectedAspectRatio);
+
+        second.SelectedAspectRatio = "Custom";
+        second.CustomAspectRatioWidth = 7;
+        second.CustomAspectRatioHeight = 5;
+
+        Assert.Equal(7, second.CustomAspectRatioWidth);
+        Assert.Equal(5, second.CustomAspectRatioHeight);
+        Assert.Equal("1:1", first.SelectedAspectRatio);
+        Assert.Equal("16:9", third.SelectedAspectRatio);
+    }
+
+    private static void AssertCrop(CropRect crop, double x, double y, double width, double height)
+    {
+        Assert.Equal(x, crop.X);
+        Assert.Equal(y, crop.Y);
+        Assert.Equal(width, crop.Width);
+        Assert.Equal(height, crop.Height);
+    }
+
     private static BatchImageItem CreateItem(string name, int width, int height) =>
         new($"C:\\images\\{name}", $"C:\\images\\{name}", name, Path.GetExtension(name), width, height, ImageImportSource.File);
 }

@@ -1,7 +1,9 @@
 using System.IO;
+using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using PrecisionImageCropper.Models;
+using PrecisionImageCropper.Utilities;
 
 namespace PrecisionImageCropper.Services;
 
@@ -85,6 +87,32 @@ public static class ImageService
         image.Freeze();
 
         return Orient(image, orientation);
+    }
+
+    /// <summary>
+    /// Produces a bounded card preview from an item's crop recipe. The source is
+    /// decoded only at thumbnail scale; no full-resolution edited bitmap is kept.
+    /// </summary>
+    public static BitmapSource LoadCroppedThumbnail(
+        string path,
+        CropRect crop,
+        int originalWidth,
+        int originalHeight,
+        int maximumDimension = 360)
+    {
+        var preview = LoadThumbnail(path, maximumDimension);
+        if (originalWidth <= 0 || originalHeight <= 0)
+            return preview;
+
+        var previewCrop = new CropRect(
+            crop.X * preview.PixelWidth / originalWidth,
+            crop.Y * preview.PixelHeight / originalHeight,
+            crop.Width * preview.PixelWidth / originalWidth,
+            crop.Height * preview.PixelHeight / originalHeight);
+        var pixels = CropMath.ToPixelRect(previewCrop, preview.PixelWidth, preview.PixelHeight);
+        var result = new CroppedBitmap(preview, pixels);
+        result.Freeze();
+        return result;
     }
 
     public static string SaveClipboardImageToTemporaryFile(BitmapSource source)

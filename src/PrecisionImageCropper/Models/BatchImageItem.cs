@@ -23,6 +23,8 @@ public sealed class BatchImageItem : INotifyPropertyChanged
     private bool _isThumbnailLoading = true;
     private CropRect _cropRectangle;
     private string _selectedAspectRatio = "FreeForm";
+    private double _customAspectRatioWidth = 1;
+    private double _customAspectRatioHeight = 1;
     private int _netRotation;
     private bool _horizontalFlip;
     private bool _verticalFlip;
@@ -88,6 +90,18 @@ public sealed class BatchImageItem : INotifyPropertyChanged
     {
         get => _selectedAspectRatio;
         set => Set(ref _selectedAspectRatio, value ?? "FreeForm");
+    }
+
+    public double CustomAspectRatioWidth
+    {
+        get => _customAspectRatioWidth;
+        set => Set(ref _customAspectRatioWidth, value > 0 ? value : 1);
+    }
+
+    public double CustomAspectRatioHeight
+    {
+        get => _customAspectRatioHeight;
+        set => Set(ref _customAspectRatioHeight, value > 0 ? value : 1);
     }
 
     public int NetRotation

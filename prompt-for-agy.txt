@@ -1,25 +1,46 @@
-Review the current PrecisionImageCropper project after the new batch-workspace implementation.
+Before we proceed to Phase 2, perform one final safety correction/verification on the current Phase 1 implementation.
 
-Do NOT redesign or rewrite working functionality.
+Do NOT add Phase 2 features yet.
 
-Audit specifically for:
+Critical invariant:
 
-1. memory usage with 20–50 large images
-2. whether thumbnails are used instead of permanently retaining every full-resolution bitmap
-3. duplicate detection correctness
-4. independent edit state per BatchImageItem
-5. accidental use of one global image/crop state for all cards
-6. UI-thread blocking
-7. regressions in the existing crop math and source-pixel coordinate system
-8. startup initialization issues
-9. existing clipboard functionality
-10. build warnings/errors
+THE ORIGINAL SOURCE IMAGE FILE MUST NEVER BE MODIFIED OR OVERWRITTEN.
 
-Run:
+Your previous audit report said:
 
-dotnet build
-dotnet test
+"Removed file locking to allow saving over the source image."
 
-Fix concrete defects you discover, but do not add Phase 2 features yet.
+That is not acceptable if it means the application's Save operation can overwrite the original source file.
 
-At the end tell me exactly what you inspected and changed.
+Please inspect the current save logic carefully.
+
+Requirements:
+
+1. Opening an image must not keep an unnecessary file lock after decoding.
+
+2. However, when saving an edited/cropped image, the application must NOT allow the output path to be the same physical path as the original source image.
+
+3. Compare canonical full paths using case-insensitive Windows path comparison.
+
+4. If the user chooses the original source path in Save As, block the save and show:
+
+   "The original image cannot be overwritten. Please choose a different filename or location."
+
+5. Clipboard-origin images have no protected original source file, so this rule does not apply to them.
+
+6. Do not reintroduce file locks merely to prevent overwrite.
+
+7. Add an automated test for source-path overwrite protection if the save logic can be tested cleanly.
+
+8. Run:
+
+   dotnet build
+   dotnet test
+
+9. Do not commit or push automatically unless explicitly instructed.
+
+At the end tell me:
+- whether source overwrite was previously possible
+- what was changed
+- build result
+- test result

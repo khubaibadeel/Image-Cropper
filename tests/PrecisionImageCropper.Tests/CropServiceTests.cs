@@ -124,6 +124,83 @@ public sealed class CropServiceTests
         }
     }
 
+    [Theory]
+    [InlineData(@"C:\images\photo.jpg", @"C:\images\photo.jpg", true)]
+    [InlineData(@"C:\images\photo.jpg", @"c:\IMAGES\PHOTO.JPG", true)]
+    [InlineData(@"C:\images\sub\..\photo.jpg", @"C:\images\photo.jpg", true)]
+    [InlineData(@"C:\images\photo.jpg", @"C:\images\photo-copy.jpg", false)]
+    [InlineData(@"C:\images\photo.jpg", @"C:\other\photo.jpg", false)]
+    [InlineData(null, @"C:\images\photo.jpg", false)]
+    [InlineData("", @"C:\images\photo.jpg", false)]
+    public void IsOriginalSourcePath_correctly_identifies_same_physical_path(string? originalPath, string outputPath, bool expected)
+    {
+        Assert.Equal(expected, CropService.IsOriginalSourcePath(originalPath, outputPath));
+    }
+
+    [Fact]
+    public void Save_blocks_overwriting_original_source_file_and_preserves_content()
+    {
+        var tempFile = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"source-protect-{Guid.NewGuid():N}.png");
+        try
+        {
+            var originalBitmap = CreateTestBitmap(100, 100);
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(originalBitmap));
+            using (var fs = System.IO.File.Create(tempFile))
+            {
+                encoder.Save(fs);
+            }
+
+            var originalBytes = System.IO.File.ReadAllBytes(tempFile);
+
+            var editedBitmap = CreateTestBitmap(50, 50);
+            var crop = new CropRect(0, 0, 50, 50);
+
+            // Attempt to save to the original source path
+            var ex = Assert.Throws<InvalidOperationException>(() =>
+                CropService.Save(editedBitmap, crop, tempFile, 95, 0, false, false, tempFile));
+
+            Assert.Equal(
+                "The original image cannot be overwritten. Please choose a different filename or location.",
+                ex.Message);
+
+            // Verify original file was not modified or corrupted
+            var currentBytes = System.IO.File.ReadAllBytes(tempFile);
+            Assert.Equal(originalBytes, currentBytes);
+        }
+        finally
+        {
+            if (System.IO.File.Exists(tempFile))
+                System.IO.File.Delete(tempFile);
+        }
+    }
+
+    [Fact]
+    public void Save_succeeds_when_destination_differs_from_source_or_for_clipboard()
+    {
+        var sourceFile = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"source-{Guid.NewGuid():N}.png");
+        var destFile = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"dest-{Guid.NewGuid():N}.png");
+        try
+        {
+            var bitmap = CreateTestBitmap(100, 100);
+            var crop = new CropRect(0, 0, 50, 50);
+
+            // Saving to different path succeeds
+            CropService.Save(bitmap, crop, destFile, 95, 0, false, false, sourceFile);
+            Assert.True(System.IO.File.Exists(destFile));
+
+            // Saving clipboard image (originalSourcePath == null) succeeds
+            System.IO.File.Delete(destFile);
+            CropService.Save(bitmap, crop, destFile, 95, 0, false, false, null);
+            Assert.True(System.IO.File.Exists(destFile));
+        }
+        finally
+        {
+            if (System.IO.File.Exists(sourceFile)) System.IO.File.Delete(sourceFile);
+            if (System.IO.File.Exists(destFile)) System.IO.File.Delete(destFile);
+        }
+    }
+
     private static BitmapSource CreateTestBitmap(int width, int height)
     {
         var pixels = new byte[width * height * 4];

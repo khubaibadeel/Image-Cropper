@@ -124,6 +124,30 @@ public partial class MainWindow : Window
         }
     }
 
+    private async Task RefreshThumbnailAsync(BatchImageItem item)
+    {
+        item.IsThumbnailLoading = true;
+        await _thumbnailThrottle.WaitAsync();
+        try
+        {
+            var thumbnail = await Task.Run(() => ImageService.LoadCroppedThumbnail(
+                item.SourceDataPath,
+                item.CropRectangle,
+                item.OriginalWidth,
+                item.OriginalHeight));
+            item.Thumbnail = thumbnail;
+        }
+        catch (Exception)
+        {
+            item.StatusMessage = "Preview unavailable";
+        }
+        finally
+        {
+            item.IsThumbnailLoading = false;
+            _thumbnailThrottle.Release();
+        }
+    }
+
     private async void PasteImage_Click(object sender, RoutedEventArgs e) => await PasteImageFromClipboardAsync();
 
     private async Task PasteImageFromClipboardAsync()
@@ -197,7 +221,17 @@ public partial class MainWindow : Window
         MessageBox.Show(this, "No supported image was found on the clipboard.", Title, MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
-    private void CropItem_Click(object sender, RoutedEventArgs e) => ExplainEditorPhase("Crop editor");
+    private void CropItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetItem(sender, out var item)) return;
+
+        _viewModel.SelectedBatchItem = item;
+        var editor = new CropEditorWindow(this, _viewModel.BatchItems, item, RefreshThumbnailAsync)
+        {
+            Owner = this
+        };
+        editor.ShowDialog();
+    }
 
     private void RotateFlipItem_Click(object sender, RoutedEventArgs e) => ExplainEditorPhase("Rotate and flip editor");
 
@@ -257,13 +291,25 @@ public partial class MainWindow : Window
         var outputPath = FileDialogService.SaveImage(item.OutputFileName, item.OriginalExtension);
         if (outputPath is null) return;
 
+        if (item.ImportSource != ImageImportSource.Clipboard &&
+            CropService.IsOriginalSourcePath(item.OriginalFilePath, outputPath))
+        {
+            MessageBox.Show(
+                this,
+                "The original image cannot be overwritten. Please choose a different filename or location.",
+                Title,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
         try
         {
             Mouse.OverrideCursor = Cursors.Wait;
             await Task.Run(() =>
             {
                 var source = ImageService.Load(item.SourceDataPath).Source;
-                CropService.Save(source, item.CropRectangle, outputPath, 95, item.NetRotation, item.HorizontalFlip, item.VerticalFlip);
+                CropService.Save(source, item.CropRectangle, outputPath, 95, item.NetRotation, item.HorizontalFlip, item.VerticalFlip, item.OriginalFilePath);
             });
             item.StatusMessage = "Saved";
         }

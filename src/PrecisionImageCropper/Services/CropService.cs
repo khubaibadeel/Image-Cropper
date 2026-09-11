@@ -8,13 +8,46 @@ namespace PrecisionImageCropper.Services
 {
     public static class CropService
     {
+        public const string CannotOverwriteOriginalMessage =
+            "The original image cannot be overwritten. Please choose a different filename or location.";
+
+        public static bool IsOriginalSourcePath(string? originalFilePath, string outputPath)
+        {
+            if (string.IsNullOrWhiteSpace(originalFilePath) || string.IsNullOrWhiteSpace(outputPath))
+                return false;
+
+            try
+            {
+                var canonicalOriginal = Path.GetFullPath(originalFilePath);
+                var canonicalOutput = Path.GetFullPath(outputPath);
+
+                if (string.Equals(canonicalOriginal, canonicalOutput, StringComparison.OrdinalIgnoreCase))
+                    return true;
+
+                if (File.Exists(canonicalOriginal) && File.Exists(canonicalOutput))
+                {
+                    var origInfo = new FileInfo(canonicalOriginal);
+                    var outInfo = new FileInfo(canonicalOutput);
+                    if (string.Equals(origInfo.FullName, outInfo.FullName, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+            }
+            catch
+            {
+                if (string.Equals(originalFilePath?.Trim(), outputPath.Trim(), StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+
         public static void Save(
             BitmapSource source,
             CropRect crop,
             string outputPath,
             int jpegQuality)
         {
-            Save(source, crop, outputPath, jpegQuality, 0, false, false);
+            Save(source, crop, outputPath, jpegQuality, 0, false, false, null);
         }
 
         public static void Save(
@@ -26,6 +59,19 @@ namespace PrecisionImageCropper.Services
             bool horizontalFlip,
             bool verticalFlip)
         {
+            Save(source, crop, outputPath, jpegQuality, netRotation, horizontalFlip, verticalFlip, null);
+        }
+
+        public static void Save(
+            BitmapSource source,
+            CropRect crop,
+            string outputPath,
+            int jpegQuality,
+            int netRotation,
+            bool horizontalFlip,
+            bool verticalFlip,
+            string? originalSourcePath)
+        {
             if (source == null)
                 throw new ArgumentNullException(nameof(source));
 
@@ -36,6 +82,9 @@ namespace PrecisionImageCropper.Services
                 throw new ArgumentException(
                     "Output path cannot be empty.",
                     nameof(outputPath));
+
+            if (IsOriginalSourcePath(originalSourcePath, outputPath))
+                throw new InvalidOperationException(CannotOverwriteOriginalMessage);
 
             string extension =
                 Path.GetExtension(outputPath).ToLowerInvariant();
