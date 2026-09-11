@@ -43,6 +43,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         OnPropertyChanged(nameof(QueueIsEmpty));
         OnPropertyChanged(nameof(QueueSummary));
+        if (SelectedBatchItem is not null && !BatchItems.Contains(SelectedBatchItem))
+        {
+            SelectedBatchItem = BatchItems.FirstOrDefault();
+        }
     }
     private bool Set<T>(ref T field, T value, [CallerMemberName] string? name = null) { if (EqualityComparer<T>.Default.Equals(field, value)) return false; field = value; OnPropertyChanged(name); return true; }
     private void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));

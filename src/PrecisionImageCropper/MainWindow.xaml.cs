@@ -15,6 +15,7 @@ public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel = new();
     private readonly HashSet<string> _queuedFilePaths = new(StringComparer.OrdinalIgnoreCase);
+    private readonly SemaphoreSlim _thumbnailThrottle = new(4, 4);
     private string? _recentFolder;
     private bool _isInitializing = true;
 
@@ -82,7 +83,7 @@ public partial class MainWindow : Window
                     ImageImportSource.File);
 
                 _viewModel.BatchItems.Add(item);
-                _viewModel.SelectedBatchItem = item;
+                _viewModel.SelectedBatchItem ??= item;
                 _recentFolder = Path.GetDirectoryName(canonicalPath);
                 _ = LoadThumbnailAsync(item);
             }
@@ -106,6 +107,7 @@ public partial class MainWindow : Window
 
     private async Task LoadThumbnailAsync(BatchImageItem item)
     {
+        await _thumbnailThrottle.WaitAsync();
         try
         {
             var thumbnail = await Task.Run(() => ImageService.LoadThumbnail(item.SourceDataPath));
@@ -118,6 +120,7 @@ public partial class MainWindow : Window
         finally
         {
             item.IsThumbnailLoading = false;
+            _thumbnailThrottle.Release();
         }
     }
 
@@ -145,7 +148,7 @@ public partial class MainWindow : Window
             catch (COMException ex) { clipboardError = ex; }
             catch (ExternalException ex) { clipboardError = ex; }
             catch (InvalidOperationException ex) { clipboardError = ex; }
-            Thread.Sleep(50);
+            await Task.Delay(50);
         }
 
         if (filePaths is { Length: > 0 })
@@ -158,19 +161,23 @@ public partial class MainWindow : Window
         {
             try
             {
-                // Persist clipboard content to a private temporary PNG, then release its full bitmap.
-                var temporaryPath = ImageService.SaveClipboardImageToTemporaryFile(clipboardImage);
-                var info = await Task.Run(() => ImageService.ReadInfo(temporaryPath));
+                var width = clipboardImage.PixelWidth;
+                var height = clipboardImage.PixelHeight;
+                var writeable = new WriteableBitmap(clipboardImage);
+                writeable.Freeze();
+
+                // Persist clipboard content to a private temporary PNG off the UI thread, then release its full bitmap.
+                var temporaryPath = await Task.Run(() => ImageService.SaveClipboardImageToTemporaryFile(writeable));
                 var item = new BatchImageItem(
                     temporaryPath,
                     null,
                     $"Clipboard Image {DateTime.Now:yyyy-MM-dd HHmmss}.png",
                     ".png",
-                    info.Width,
-                    info.Height,
+                    width,
+                    height,
                     ImageImportSource.Clipboard);
                 _viewModel.BatchItems.Add(item);
-                _viewModel.SelectedBatchItem = item;
+                _viewModel.SelectedBatchItem ??= item;
                 _ = LoadThumbnailAsync(item);
             }
             catch (Exception ex)
@@ -216,7 +223,7 @@ public partial class MainWindow : Window
                 var source = ImageService.Load(item.SourceDataPath).Source;
                 return CropService.Render(source, item.CropRectangle, item.NetRotation, item.HorizontalFlip, item.VerticalFlip);
             });
-            Clipboard.SetImage(image);
+            await SetClipboardImageWithRetryAsync(image);
         }
         catch (Exception ex)
         {
@@ -225,6 +232,22 @@ public partial class MainWindow : Window
         finally
         {
             Mouse.OverrideCursor = null;
+        }
+    }
+
+    private static async Task SetClipboardImageWithRetryAsync(BitmapSource image)
+    {
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            try
+            {
+                Clipboard.SetImage(image);
+                return;
+            }
+            catch (Exception) when (attempt < 2)
+            {
+                await Task.Delay(50);
+            }
         }
     }
 
@@ -268,7 +291,18 @@ public partial class MainWindow : Window
 
         _viewModel.BatchItems.Remove(item);
         if (item.OriginalFilePath is not null)
+        {
             _queuedFilePaths.Remove(item.OriginalFilePath);
+        }
+        else if (item.ImportSource == ImageImportSource.Clipboard)
+        {
+            try
+            {
+                if (File.Exists(item.SourceDataPath))
+                    File.Delete(item.SourceDataPath);
+            }
+            catch { }
+        }
     }
 
     private void SaveAll_Click(object sender, RoutedEventArgs e)
@@ -324,4 +358,21 @@ public partial class MainWindow : Window
 
     private void ShowError(string title, Exception error) =>
         MessageBox.Show(this, $"{title}.\n\n{error.Message}", Title, MessageBoxButton.OK, MessageBoxImage.Error);
+
+    protected override void OnClosed(EventArgs e)
+    {
+        base.OnClosed(e);
+        try
+        {
+            var tempFolder = Path.Combine(Path.GetTempPath(), "PrecisionImageCropper");
+            if (Directory.Exists(tempFolder))
+            {
+                foreach (var file in Directory.GetFiles(tempFolder, "clipboard-*.png"))
+                {
+                    try { File.Delete(file); } catch { }
+                }
+            }
+        }
+        catch { }
+    }
 }

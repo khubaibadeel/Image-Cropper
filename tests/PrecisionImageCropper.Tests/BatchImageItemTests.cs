@@ -38,6 +38,24 @@ public sealed class BatchImageItemTests
         Assert.Equal("summer.photo-edited.tiff", item.OutputFileName);
     }
 
+    [Fact]
+    public void Removing_selected_item_updates_selected_batch_item_in_view_model()
+    {
+        var vm = new PrecisionImageCropper.ViewModels.MainViewModel();
+        var item1 = CreateItem("first.jpg", 100, 100);
+        var item2 = CreateItem("second.jpg", 100, 100);
+        vm.BatchItems.Add(item1);
+        vm.BatchItems.Add(item2);
+        vm.SelectedBatchItem = item1;
+
+        vm.BatchItems.Remove(item1);
+
+        Assert.Equal(item2, vm.SelectedBatchItem);
+
+        vm.BatchItems.Remove(item2);
+        Assert.Null(vm.SelectedBatchItem);
+    }
+
     private static BatchImageItem CreateItem(string name, int width, int height) =>
         new($"C:\\images\\{name}", $"C:\\images\\{name}", name, Path.GetExtension(name), width, height, ImageImportSource.File);
 }

@@ -22,10 +22,14 @@ public static class ImageService
 
         // OnLoad releases the source file immediately. Orientation is materialized before both
         // preview and final crop use the same, correctly oriented pixel coordinate system.
-        var orientation = ReadExifOrientation(path);
+        using var stream = File.OpenRead(path);
+        var frame = BitmapFrame.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
+        var orientation = ReadExifOrientation(frame.Metadata as BitmapMetadata);
+
+        stream.Position = 0;
         var image = new BitmapImage();
         image.BeginInit();
-        image.UriSource = new Uri(path, UriKind.Absolute);
+        image.StreamSource = stream;
         image.CacheOption = BitmapCacheOption.OnLoad;
         image.CreateOptions = BitmapCreateOptions.PreservePixelFormat;
         image.EndInit();
@@ -43,7 +47,7 @@ public static class ImageService
 
         using var stream = File.OpenRead(path);
         var frame = BitmapFrame.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
-        var orientation = ReadExifOrientation(path);
+        var orientation = ReadExifOrientation(frame.Metadata as BitmapMetadata);
         var swapsDimensions = orientation is 5 or 6 or 7 or 8;
         return swapsDimensions
             ? new ImageFileInfo(frame.PixelHeight, frame.PixelWidth)
@@ -54,21 +58,33 @@ public static class ImageService
     public static BitmapSource LoadThumbnail(string path, int maximumDimension = 360)
     {
         if (maximumDimension < 1) throw new ArgumentOutOfRangeException(nameof(maximumDimension));
+        if (!File.Exists(path)) throw new FileNotFoundException("The selected image could not be found.", path);
+        if (!IsSupportedFile(path))
+            throw new NotSupportedException("This file type is not supported. Choose JPG, PNG, BMP, or TIFF.");
 
-        var info = ReadInfo(path);
+        using var stream = File.OpenRead(path);
+        var frame = BitmapFrame.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
+        var rawWidth = frame.PixelWidth;
+        var rawHeight = frame.PixelHeight;
+        var orientation = ReadExifOrientation(frame.Metadata as BitmapMetadata);
+
+        stream.Position = 0;
         var image = new BitmapImage();
         image.BeginInit();
-        image.UriSource = new Uri(path, UriKind.Absolute);
+        image.StreamSource = stream;
         image.CacheOption = BitmapCacheOption.OnLoad;
         image.CreateOptions = BitmapCreateOptions.PreservePixelFormat;
-        if (info.Width >= info.Height)
-            image.DecodePixelWidth = maximumDimension;
-        else
-            image.DecodePixelHeight = maximumDimension;
+        if (Math.Max(rawWidth, rawHeight) > maximumDimension)
+        {
+            if (rawWidth >= rawHeight)
+                image.DecodePixelWidth = maximumDimension;
+            else
+                image.DecodePixelHeight = maximumDimension;
+        }
         image.EndInit();
         image.Freeze();
 
-        return Orient(image, ReadExifOrientation(path));
+        return Orient(image, orientation);
     }
 
     public static string SaveClipboardImageToTemporaryFile(BitmapSource source)
@@ -93,16 +109,26 @@ public static class ImageService
         return copy;
     }
 
+    private static ushort ReadExifOrientation(BitmapMetadata? metadata)
+    {
+        try
+        {
+            if (metadata?.GetQuery("/app1/ifd/{ushort=274}") is not null)
+            {
+                return Convert.ToUInt16(metadata.GetQuery("/app1/ifd/{ushort=274}"));
+            }
+        }
+        catch { /* WPF will provide the user-facing decode error if the file is corrupt. */ }
+        return 1;
+    }
+
     private static ushort ReadExifOrientation(string path)
     {
         try
         {
             using var stream = File.OpenRead(path);
             var frame = BitmapFrame.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
-            if (frame.Metadata is BitmapMetadata metadata && metadata.GetQuery("/app1/ifd/{ushort=274}") is not null)
-            {
-                return Convert.ToUInt16(metadata.GetQuery("/app1/ifd/{ushort=274}"));
-            }
+            return ReadExifOrientation(frame.Metadata as BitmapMetadata);
         }
         catch { /* WPF will provide the user-facing decode error if the file is corrupt. */ }
         return 1;

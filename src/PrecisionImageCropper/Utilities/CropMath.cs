@@ -47,10 +47,10 @@ public static class CropMath
     {
         // Round once, at export time. This keeps an entered 1200 × 800 crop exactly
         // 1200 × 800 pixels while display/drag math remains continuous and drift-free.
-        var left = Math.Clamp((int)Math.Round(crop.X), 0, imageWidth - 1);
-        var top = Math.Clamp((int)Math.Round(crop.Y), 0, imageHeight - 1);
-        var width = Math.Clamp(Math.Max(1, (int)Math.Round(crop.Width)), 1, imageWidth - left);
-        var height = Math.Clamp(Math.Max(1, (int)Math.Round(crop.Height)), 1, imageHeight - top);
+        var left = Math.Clamp((int)Math.Round(crop.X), 0, Math.Max(0, imageWidth - 1));
+        var top = Math.Clamp((int)Math.Round(crop.Y), 0, Math.Max(0, imageHeight - 1));
+        var width = Math.Clamp(Math.Max(1, (int)Math.Round(crop.Width)), 1, Math.Max(1, imageWidth - left));
+        var height = Math.Clamp(Math.Max(1, (int)Math.Round(crop.Height)), 1, Math.Max(1, imageHeight - top));
         return new Int32Rect(left, top, width, height);
     }
 }

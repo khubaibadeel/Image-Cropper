@@ -111,17 +111,22 @@ namespace PrecisionImageCropper.Services
             var normalizedRotation = ((netRotation % 360) + 360) % 360;
             if (normalizedRotation is not (0 or 90 or 180 or 270))
                 throw new ArgumentOutOfRangeException(nameof(netRotation));
-            if (!horizontalFlip && !verticalFlip && normalizedRotation == 0)
-                return cropped;
+            BitmapSource output = cropped;
+            if (horizontalFlip || verticalFlip || normalizedRotation != 0)
+            {
+                var transform = new System.Windows.Media.TransformGroup();
+                if (horizontalFlip || verticalFlip)
+                    transform.Children.Add(new System.Windows.Media.ScaleTransform(horizontalFlip ? -1 : 1, verticalFlip ? -1 : 1));
+                if (normalizedRotation != 0)
+                    transform.Children.Add(new System.Windows.Media.RotateTransform(normalizedRotation));
+                var rendered = new TransformedBitmap(cropped, transform);
+                rendered.Freeze();
+                output = rendered;
+            }
 
-            var transform = new System.Windows.Media.TransformGroup();
-            if (horizontalFlip || verticalFlip)
-                transform.Children.Add(new System.Windows.Media.ScaleTransform(horizontalFlip ? -1 : 1, verticalFlip ? -1 : 1));
-            if (normalizedRotation != 0)
-                transform.Children.Add(new System.Windows.Media.RotateTransform(normalizedRotation));
-            var rendered = new TransformedBitmap(cropped, transform);
-            rendered.Freeze();
-            return rendered;
+            var materialized = new WriteableBitmap(output);
+            materialized.Freeze();
+            return materialized;
         }
     }
 }
