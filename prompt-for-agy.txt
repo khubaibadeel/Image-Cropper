@@ -1,46 +1,55 @@
-Before we proceed to Phase 2, perform one final safety correction/verification on the current Phase 1 implementation.
-
-Do NOT add Phase 2 features yet.
-
-Critical invariant:
-
-THE ORIGINAL SOURCE IMAGE FILE MUST NEVER BE MODIFIED OR OVERWRITTEN.
-
-Your previous audit report said:
-
-"Removed file locking to allow saving over the source image."
-
-That is not acceptable if it means the application's Save operation can overwrite the original source file.
-
-Please inspect the current save logic carefully.
-
-Requirements:
-
-1. Opening an image must not keep an unnecessary file lock after decoding.
-
-2. However, when saving an edited/cropped image, the application must NOT allow the output path to be the same physical path as the original source image.
-
-3. Compare canonical full paths using case-insensitive Windows path comparison.
-
-4. If the user chooses the original source path in Save As, block the save and show:
-
-   "The original image cannot be overwritten. Please choose a different filename or location."
-
-5. Clipboard-origin images have no protected original source file, so this rule does not apply to them.
-
-6. Do not reintroduce file locks merely to prevent overwrite.
-
-7. Add an automated test for source-path overwrite protection if the save logic can be tested cleanly.
-
-8. Run:
-
-   dotnet build
-   dotnet test
-
-9. Do not commit or push automatically unless explicitly instructed.
-
-At the end tell me:
-- whether source overwrite was previously possible
-- what was changed
-- build result
-- test result
+Act as the final independent code reviewer for this existing WPF image-editing application.
+Do not implement new features.
+Inspect the complete PrecisionImageCropper codebase and look specifically for defects introduced by the new batch functionality.
+The intended workflow is:
+multiple images
+→ independent BatchImageItem state
+→ per-image crop modal
+→ per-image rotate/flip modal
+→ light-themed UI
+→ Previous / Next
+→ Apply / Apply & Next
+→ recent 10 files
+→ recent 5 folders
+→ multiple drag/drop
+→ clipboard paste
+→ copy final edited result
+→ individual Save
+→ Save All as ZIP
+Verify these invariants:
+1. Source files are NEVER modified.
+2. Every image has independent edit state.
+3. Cropping one card cannot modify another.
+4. Reopening a Crop modal retains its previous crop.
+5. Rotation uses normalized net rotation.
+6. Two identical flips cancel.
+7. Preview and export use the same transform order.
+8. Crop coordinates remain source-pixel accurate.
+9. EXIF orientation does not cause preview/export mismatch.
+10. Recent files are max 10.
+11. Recent folders are max 5.
+12. Recents persist in user AppData.
+13. Duplicate files cannot enter the queue.
+14. Multi-drop shows no success popup when all imports succeed.
+15. Import failures produce one summary dialog.
+16. Raw clipboard images default to PNG.
+17. Copy Image copies the fully edited result.
+18. Ctrl+C / Ctrl+V inside TextBox controls remain normal text operations.
+19. Save filenames correctly describe net edits.
+20. Unedited images in Save All are included.
+21. Save All creates a valid ZIP with unique entry names.
+22. No full-resolution bitmap is unnecessarily retained for every queue card.
+23. UI remains responsive during ZIP creation.
+24. No unfinished TODO/stub code exists in production paths.
+25. bin, obj and dist remain ignored by Git.
+Run all applicable build/tests.
+Fix real defects you find.
+Do not make stylistic rewrites merely because you prefer a different architecture.
+Do not create another Git branch.
+Work on the existing main working tree.
+At the end provide:
+- defects found
+- fixes made
+- files changed
+- tests run
+- remaining risks requiring manual GUI testing
