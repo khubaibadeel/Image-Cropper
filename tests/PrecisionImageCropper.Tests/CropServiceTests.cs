@@ -92,6 +92,28 @@ public sealed class CropServiceTests
     }
 
     [Fact]
+    public void Render_crops_before_flipping_in_the_shared_export_and_preview_order()
+    {
+        // Red, Green, Blue. Crop Green/Blue, then flip: Blue must be first.
+        var pixels = new byte[] {
+            0, 0, 255, 255,
+            0, 255, 0, 255,
+            255, 0, 0, 255
+        };
+        var bitmap = BitmapSource.Create(3, 1, 96, 96, PixelFormats.Bgra32, null, pixels, 12);
+        bitmap.Freeze();
+
+        var rendered = CropService.Render(bitmap, new CropRect(1, 0, 2, 1), horizontalFlip: true);
+        var output = new byte[8];
+        rendered.CopyPixels(output, 8, 0);
+
+        Assert.Equal(255, output[0]); // Blue component of the first (Blue) pixel.
+        Assert.Equal(0, output[2]);
+        Assert.Equal(0, output[4]); // Blue component of the second (Green) pixel.
+        Assert.Equal(255, output[5]);
+    }
+
+    [Fact]
     public void ImageService_ReadInfo_and_LoadThumbnail_do_not_lock_file()
     {
         var tempFile = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"test-image-{Guid.NewGuid():N}.png");

@@ -100,6 +100,23 @@ public static class ImageService
         int originalHeight,
         int maximumDimension = 360)
     {
+        return LoadEditedThumbnail(path, crop, originalWidth, originalHeight, 0, false, false, maximumDimension);
+    }
+
+    /// <summary>
+    /// Produces a bounded card preview using the same crop/flip/rotation order
+    /// as final export. Only a thumbnail-scale source bitmap is decoded.
+    /// </summary>
+    public static BitmapSource LoadEditedThumbnail(
+        string path,
+        CropRect crop,
+        int originalWidth,
+        int originalHeight,
+        int netRotation,
+        bool horizontalFlip,
+        bool verticalFlip,
+        int maximumDimension = 360)
+    {
         var preview = LoadThumbnail(path, maximumDimension);
         if (originalWidth <= 0 || originalHeight <= 0)
             return preview;
@@ -109,10 +126,7 @@ public static class ImageService
             crop.Y * preview.PixelHeight / originalHeight,
             crop.Width * preview.PixelWidth / originalWidth,
             crop.Height * preview.PixelHeight / originalHeight);
-        var pixels = CropMath.ToPixelRect(previewCrop, preview.PixelWidth, preview.PixelHeight);
-        var result = new CroppedBitmap(preview, pixels);
-        result.Freeze();
-        return result;
+        return CropService.Render(preview, previewCrop, netRotation, horizontalFlip, verticalFlip);
     }
 
     public static string SaveClipboardImageToTemporaryFile(BitmapSource source)

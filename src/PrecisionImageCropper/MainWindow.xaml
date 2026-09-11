@@ -32,11 +32,18 @@
             <DockPanel LastChildFill="False">
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
                     <Button Style="{StaticResource PrimaryToolbarButton}" Click="Open_Click" ToolTip="Open one or more image files">Open Images &#x25BE;</Button>
-                    <Button Style="{StaticResource ToolbarButton}" IsEnabled="False" ToolTip="Recent image history will be available in a later phase.">Open Recent &#x25BE;</Button>
+                    <Menu Background="Transparent" Margin="0,0,8,0" VerticalAlignment="Center">
+                        <MenuItem x:Name="OpenRecentMenu" Header="Open Recent" Padding="13,7" Foreground="#263445" Background="White" BorderBrush="#D5DAE2" ToolTip="Open a recently used image or folder">
+                            <MenuItem x:Name="RecentFilesMenu" Header="Recent Files"/>
+                            <Separator/>
+                            <MenuItem x:Name="RecentFoldersMenu" Header="Recent Folders"/>
+                        </MenuItem>
+                    </Menu>
                     <Button Style="{StaticResource ToolbarButton}" Click="PasteImage_Click" ToolTip="Paste image from clipboard (Ctrl+V)">Paste Image</Button>
-                    <Button Style="{StaticResource ToolbarButton}" Click="SaveAll_Click" ToolTip="Save all is prepared for the batch export phase.">Save All</Button>
+                    <Button x:Name="SaveAllButton" Style="{StaticResource ToolbarButton}" Click="SaveAll_Click" ToolTip="Save all queued images to a ZIP archive">Save All</Button>
+                    <Button x:Name="CancelExportButton" Style="{StaticResource ToolbarButton}" Click="CancelExport_Click" Visibility="Collapsed" ToolTip="Cancel ZIP export">Cancel Export</Button>
                 </StackPanel>
-                <TextBlock DockPanel.Dock="Right" VerticalAlignment="Center" Foreground="#66758A" Text="{Binding QueueSummary}" />
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center"><TextBlock x:Name="ExportProgressText" Margin="0,0,14,0" Foreground="#1769D8"/><TextBlock Foreground="#66758A" Text="{Binding QueueSummary}" /></StackPanel>
             </DockPanel>
         </Border>
         <StatusBar DockPanel.Dock="Bottom" Background="White" BorderBrush="#D9DEE6" BorderThickness="0,1,0,0">
@@ -72,6 +79,7 @@
                                         <TextBlock Text="{Binding OriginalFileName}" FontWeight="SemiBold" Foreground="#263445" TextTrimming="CharacterEllipsis" ToolTip="{Binding OriginalFileName}"/>
                                         <TextBlock Margin="0,3,0,0" Text="{Binding OriginalDimensionsText}" Foreground="#66758A" FontSize="12"/>
                                         <TextBlock Margin="0,2,0,0" Text="{Binding OutputDimensionsText, StringFormat=Output: {0}}" Foreground="#66758A" FontSize="12"/>
+                                        <TextBlock Margin="0,3,0,0" Text="{Binding StatusMessage}" Foreground="#1769D8" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip="{Binding StatusMessage}"/>
                                         <Button Tag="{Binding}" Click="SaveItem_Click" ToolTip="Save Image" HorizontalAlignment="Left" Margin="0,10,0,0" Padding="11,5" Background="#1769D8" Foreground="White" BorderBrush="#1769D8" Cursor="Hand">Save</Button>
                                     </StackPanel>
                                 </Grid>

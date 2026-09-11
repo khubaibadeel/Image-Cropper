@@ -86,53 +86,55 @@ namespace PrecisionImageCropper.Services
             if (IsOriginalSourcePath(originalSourcePath, outputPath))
                 throw new InvalidOperationException(CannotOverwriteOriginalMessage);
 
-            string extension =
-                Path.GetExtension(outputPath).ToLowerInvariant();
-
-            BitmapEncoder encoder;
-
-            switch (extension)
-            {
-                case ".jpg":
-                case ".jpeg":
-                    encoder = new JpegBitmapEncoder
-                    {
-                        QualityLevel = Math.Clamp(jpegQuality, 1, 100)
-                    };
-                    break;
-
-                case ".png":
-                    encoder = new PngBitmapEncoder();
-                    break;
-
-                case ".bmp":
-                    encoder = new BmpBitmapEncoder();
-                    break;
-
-                case ".tif":
-                case ".tiff":
-                    encoder = new TiffBitmapEncoder();
-                    break;
-
-                default:
-                    throw new NotSupportedException(
-                        "The output file extension must be JPG, JPEG, PNG, BMP, TIF, or TIFF.");
-            }
-
-            encoder.Frames.Add(BitmapFrame.Create(Render(source, crop, netRotation, horizontalFlip, verticalFlip)));
-
             using FileStream output = new FileStream(
                 outputPath,
                 FileMode.Create,
                 FileAccess.Write,
                 FileShare.None);
-
-            encoder.Save(output);
+            SaveRendered(Render(source, crop, netRotation, horizontalFlip, verticalFlip), outputPath, jpegQuality, output);
         }
 
+        public static void SaveRendered(BitmapSource rendered, string outputPath, int jpegQuality)
+        {
+            using var output = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None);
+            SaveRendered(rendered, outputPath, jpegQuality, output);
+        }
+
+        public static void SaveRendered(BitmapSource rendered, string outputName, int jpegQuality, Stream output)
+        {
+            ArgumentNullException.ThrowIfNull(rendered);
+            ArgumentNullException.ThrowIfNull(output);
+            var encoder = CreateEncoder(Path.GetExtension(outputName), jpegQuality);
+            encoder.Frames.Add(BitmapFrame.Create(rendered));
+            if (output.CanSeek)
+            {
+                encoder.Save(output);
+                return;
+            }
+
+            // WPF bitmap encoders require a seekable target, while ZIP entry
+            // streams are intentionally forward-only. Buffer one encoded image
+            // at a time, then stream it into the archive entry.
+            using var encoded = new MemoryStream();
+            encoder.Save(encoded);
+            encoded.Position = 0;
+            encoded.CopyTo(output);
+        }
+
+        private static BitmapEncoder CreateEncoder(string extension, int jpegQuality) => extension.ToLowerInvariant() switch
+        {
+            ".jpg" or ".jpeg" => new JpegBitmapEncoder { QualityLevel = Math.Clamp(jpegQuality, 1, 100) },
+            ".png" => new PngBitmapEncoder(),
+            ".bmp" => new BmpBitmapEncoder(),
+            ".tif" or ".tiff" => new TiffBitmapEncoder(),
+            _ => throw new NotSupportedException("The output file extension must be JPG, JPEG, PNG, BMP, TIF, or TIFF.")
+        };
+
         /// <summary>
-        /// Uses the same source-pixel crop rectangle as Save and applies the
-        /// independent batch edit state without mutating the source bitmap.
+        /// Renders the canonical batch edit order: ImageService first normalizes
+        /// EXIF orientation, crop is applied in that upright source-pixel space,
+        /// then flips and the net clockwise rotation are applied. Previews and
+        /// exports both call this method so they cannot disagree.
         /// </summary>
         public static BitmapSource Render(
             BitmapSource source,

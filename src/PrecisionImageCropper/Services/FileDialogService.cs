@@ -34,7 +34,7 @@ public static class FileDialogService
         var normalizedExtension = NormalizeExtension(preferredExtension);
         var dialog = new SaveFileDialog
         {
-            Title = "Save Cropped Image",
+            Title = "Save Image",
             FileName = suggestedFileName,
             DefaultExt = normalizedExtension,
             AddExtension = true,
@@ -55,6 +55,20 @@ public static class FileDialogService
         }
 
         return dialog.FileName;
+    }
+
+    public static string? SaveZip(string suggestedFileName)
+    {
+        var dialog = new SaveFileDialog
+        {
+            Title = "Save All Images as ZIP",
+            FileName = suggestedFileName,
+            DefaultExt = ".zip",
+            AddExtension = true,
+            OverwritePrompt = true,
+            Filter = "ZIP archive (*.zip)|*.zip"
+        };
+        return dialog.ShowDialog() == true ? dialog.FileName : null;
     }
 
     private static string NormalizeExtension(string? extension)

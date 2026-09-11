@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows.Media.Imaging;
+using PrecisionImageCropper.Services;
 using PrecisionImageCropper.Utilities;
 
 namespace PrecisionImageCropper.Models;
@@ -164,8 +165,13 @@ public sealed class BatchImageItem : INotifyPropertyChanged
 
     public string GetSuggestedOutputFileName()
     {
-        var stem = Path.GetFileNameWithoutExtension(OriginalFileName);
-        return $"{stem}{(HasUnsavedChanges ? "-edited" : "-copy")}{OriginalExtension}";
+        return OutputFileNameService.Create(
+            OriginalFileName,
+            OriginalExtension,
+            HasCrop,
+            NetRotation,
+            HorizontalFlip,
+            VerticalFlip);
     }
 
     private int CropWidth => Math.Max(1, (int)Math.Round(_cropRectangle.Width));

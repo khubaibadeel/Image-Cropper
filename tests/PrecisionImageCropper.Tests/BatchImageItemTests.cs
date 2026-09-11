@@ -33,9 +33,9 @@ public sealed class BatchImageItemTests
     {
         var item = CreateItem("summer.photo.tiff", 100, 100);
 
-        Assert.Equal("summer.photo-copy.tiff", item.OutputFileName);
+        Assert.Equal("summer.photo.tiff", item.OutputFileName);
         item.CropRectangle = new CropRect(0, 0, 50, 50);
-        Assert.Equal("summer.photo-edited.tiff", item.OutputFileName);
+        Assert.Equal("summer.photo-cropped.tiff", item.OutputFileName);
     }
 
     [Fact]
@@ -85,6 +85,47 @@ public sealed class BatchImageItemTests
         Assert.Equal(5, second.CustomAspectRatioHeight);
         Assert.Equal("1:1", first.SelectedAspectRatio);
         Assert.Equal("16:9", third.SelectedAspectRatio);
+    }
+
+    [Fact]
+    public void Rotation_and_flip_state_normalizes_to_a_single_edit_recipe()
+    {
+        var item = CreateItem("photo.png", 400, 300);
+
+        for (var i = 0; i < 4; i++)
+            item.NetRotation = (item.NetRotation + 90) % 360;
+        Assert.Equal(0, item.NetRotation);
+
+        item.NetRotation = (item.NetRotation + 90) % 360;
+        item.NetRotation = (item.NetRotation + 90) % 360;
+        Assert.Equal(180, item.NetRotation);
+
+        item.NetRotation = (item.NetRotation + 90) % 360;
+        Assert.Equal(270, item.NetRotation);
+
+        item.HorizontalFlip = !item.HorizontalFlip;
+        item.HorizontalFlip = !item.HorizontalFlip;
+        Assert.False(item.HorizontalFlip);
+    }
+
+    [Theory]
+    [InlineData(false, 0, false, false, "image.png")]
+    [InlineData(true, 0, false, false, "image-cropped.png")]
+    [InlineData(false, 90, false, false, "image-rotated-clockwise.png")]
+    [InlineData(false, 270, false, false, "image-rotated-counterclockwise.png")]
+    [InlineData(false, 180, false, false, "image-rotated-180.png")]
+    [InlineData(false, 0, true, false, "image-flipped-horizontal.png")]
+    [InlineData(false, 0, false, true, "image-flipped-vertical.png")]
+    [InlineData(true, 270, true, false, "image-cropped-rotated-counterclockwise-flipped-horizontal.png")]
+    public void Output_name_uses_deterministic_edit_descriptors(bool hasCrop, int rotation, bool horizontal, bool vertical, string expected)
+    {
+        var item = CreateItem("image.png", 100, 100);
+        if (hasCrop) item.CropRectangle = new CropRect(0, 0, 50, 50);
+        item.NetRotation = rotation;
+        item.HorizontalFlip = horizontal;
+        item.VerticalFlip = vertical;
+
+        Assert.Equal(expected, item.OutputFileName);
     }
 
     private static void AssertCrop(CropRect crop, double x, double y, double width, double height)
