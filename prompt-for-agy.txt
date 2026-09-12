@@ -1,536 +1,187 @@
-Continue the existing PRE-PHASE-6 audit of the PrecisionImageCropper WPF project.
-
-IMPORTANT:
-This is a CONTINUATION of an audit already in progress.
-Do NOT restart the project from scratch.
-Do NOT discard current uncommitted changes.
-Do NOT create a new branch.
-Stay on main.
-Do NOT commit.
-Do NOT push.
-
-Project root:
+Continue the PRE-PHASE-6 audit of:
 
 E:\Khubaib\Image Cropper
 
-Solution:
+Do NOT restart the audit.
+Do NOT create a new branch.
+Stay on main.
+Do NOT commit or push.
+Preserve all current changes.
 
-E:\Khubaib\Image Cropper\PrecisionImageCropper.sln
-
-==================================================
-FIRST: RECOVER CONTEXT
-==================================================
-
-Read this file first:
+First read:
 
 E:\Khubaib\Image Cropper\prompt-for-agy.txt
-
-That file contains the complete final Pre-Phase-6 audit specification.
 
 Then inspect:
 
 git status
 git diff
+git log -5 --oneline
 
-Do NOT overwrite or revert the current audit work.
+CURRENT KNOWN STATE:
 
-==================================================
-CURRENT STATE FROM PREVIOUS AGY SESSION
-==================================================
+- Previous AGY already read the full audit prompt.
+- Initial baseline had 41 passing tests.
+- New audit tests were added.
+- CropMathAndRenderPipelineTests.cs originally failed to compile because BatchZipExportService.GetUniqueEntryName is internal.
+- Previous AGY fixed this cleanly by adding:
 
-The previous session already completed these baseline checks:
+  <InternalsVisibleTo Include="PrecisionImageCropper.Tests" />
 
-- Branch: main
-- origin/main was up to date
-- Initial working tree was clean
-- Initial Debug build:
+  to PrecisionImageCropper.csproj.
+
+- After that:
+  Debug build succeeded:
   0 warnings
   0 errors
-- Initial test suite:
-  41 tests passed
+
+- Full test suite:
+  106 passed
   0 failed
 
-The previous session inspected the major application files including:
+- Release build also succeeded:
+  0 warnings
+  0 errors
 
-- BatchImageItem.cs
-- CropRect.cs
-- ImageFileInfo.cs
-- ImageService.cs
-- CropService.cs
-- BatchZipExportService.cs
-- OutputFileNameService.cs
-- SettingsService.cs
-- ImageRenderService.cs
-- FileDialogService.cs
-- CropMath.cs
-- CoordinateConverter.cs
-- MainViewModel.cs
-- MainWindow.xaml.cs
-- CropEditorWindow.xaml.cs
-- RotateFlipEditorWindow.xaml.cs
-- CropAdorner.cs
-- App.xaml.cs
-- existing tests
+The previous session ran successfully through:
+
+dotnet clean
+dotnet restore
+dotnet build -c Release
+
+Quota ended immediately after the successful Release build.
+
+CONTINUE FROM HERE.
 
 ==================================================
-CHANGES ALREADY MADE
+1. FINISH REQUIRED BUILD/TEST SEQUENCE
 ==================================================
 
-The previous session modified:
-
-1. src\PrecisionImageCropper\App.xaml.cs
-
-It changed raw user-facing stack traces such as:
-
-ex.ToString()
-
-to concise user-facing messages using ex.Message.
-
-Do NOT revert this unless you discover a concrete defect in the replacement.
-
-2. Added:
-
-tests\PrecisionImageCropper.Tests\OutputFileNameServiceTests.cs
-
-3. Added:
-
-tests\PrecisionImageCropper.Tests\CropMathAndRenderPipelineTests.cs
-
-Current git status before interruption showed only:
-
-M  src/PrecisionImageCropper/App.xaml.cs
-?? tests/PrecisionImageCropper.Tests/CropMathAndRenderPipelineTests.cs
-?? tests/PrecisionImageCropper.Tests/OutputFileNameServiceTests.cs
-
-No dist/bin/obj files were being tracked.
-
-==================================================
-KNOWN CURRENT BUILD PROBLEM
-==================================================
-
-The new audit tests currently DO NOT COMPILE.
-
-The previous build reported 7 errors because:
-
-CropMathAndRenderPipelineTests.cs
-
-references:
-
-BatchZipExportService.GetUniqueEntryName
-
-but BatchZipExportService has no public/internal method with that name.
-
-DO NOT blindly add a production method merely to make the tests pass.
-
-First inspect BatchZipExportService.cs.
-
-Preferred approach:
-
-Test ZIP filename collision behavior through the existing public export behavior if possible.
-
-Only expose/refactor a helper if:
-- it improves production design,
-- the helper genuinely belongs in reusable logic,
-- and it is not being added solely for unit-test convenience.
-
-Fix the new tests appropriately.
-
-==================================================
-IMPORTANT DEFECTS / RISKS ALREADY IDENTIFIED
-==================================================
-
-The previous session identified the following areas:
-
-1. App.xaml.cs exposed raw stack traces to end users.
-   This has already been fixed.
-
-2. RotateFlipEditorWindow Cancel/state behavior needs deeper verification.
-
-The concern was:
-
-If Apply or navigation mutates BatchImageItem state while the dialog is still open, later Cancel may not restore the state that existed when the modal originally opened.
-
-Audit this carefully.
-
-Required semantics:
-
-- temporary Rotate/Flip clicks update only live preview
-- Apply commits intended state
-- Cancel discards uncommitted modal changes
-- Previous / Next / Apply & Next must not leak temporary state between images
-- reopening an image must reflect only committed state
-
-Do not assume this is correct.
-Test it.
-
-3. Output filename behavior needs stronger test coverage.
-
-Verify:
-- .jpg preserved
-- .jpeg preserved
-- .png preserved
-- .bmp preserved
-- .tif/.tiff preserved
-- net rotation naming
-- flip cancellation
-- crop + rotate + flip deterministic ordering
-- no suffix for cancelled-out transformations
-
-4. Crop/render pipeline needs stronger combination tests.
-
-Verify:
-- zero dimensions safety
-- crop only
-- rotation only
-- flip only
-- crop + rotation
-- crop + flip
-- crop + rotation + flip
-- output dimensions
-- render consistency
-
-5. ZIP behavior needs full public-behavior tests.
-
-Verify:
-- expected entry count
-- archive readable
-- duplicate output names made unique
-- no overwriting
-- no path traversal
-- unedited images included
-- edited images rendered
-- extensions preserved
-
-==================================================
-LAST COMMAND STATE
-==================================================
-
-The previous AGY session attempted a PowerShell command using &&.
-
-That failed because the PowerShell version does not accept && as a statement separator.
-
-Use separate commands or semicolons.
-
-The final successful command before interruption was:
-
-dotnet clean "E:\Khubaib\Image Cropper\PrecisionImageCropper.sln"
-
-Result:
-
-Build succeeded.
-0 warnings.
-0 errors.
-
-The session was interrupted immediately afterward.
-
-So continue from there.
-
-==================================================
-STEP 1 — INSPECT CURRENT WORK
-==================================================
-
-Run:
-
-git status
-git diff
-
-Read the two new test files completely.
-
-Read:
-
-BatchZipExportService.cs
-OutputFileNameService.cs
-ImageRenderService.cs
-CropService.cs
-RotateFlipEditorWindow.xaml.cs
-CropEditorWindow.xaml.cs
-
-Understand the current public APIs before changing tests or production code.
-
-==================================================
-STEP 2 — FIX THE NEW TEST SUITE
-==================================================
-
-Fix the compile errors in the new audit tests.
-
-Do NOT weaken assertions merely to make them pass.
-
-Do NOT delete valuable tests just because implementation is inconvenient.
-
-However:
-
-Do NOT modify production architecture solely to expose private implementation details.
-
-Prefer behavioral/public API testing.
-
-Then run:
-
-dotnet build
-
-Do not proceed until:
-
-0 errors.
-
-==================================================
-STEP 3 — CONTINUE THE FULL AUDIT
-==================================================
-
-Continue from the complete requirements in:
-
-prompt-for-agy.txt
-
-Do not assume areas already inspected are automatically correct.
-
-In particular complete these high-risk audit sections:
-
-- independent BatchImageItem state
-- memory usage with 20–50 large images
-- import pipeline
-- duplicate detection
-- queue removal
-- original source-file overwrite protection
-- crop editor
-- Rotate/Flip editor
-- transform order consistency
-- Previous/Next
-- Apply/Apply & Next
-- filename generation
-- individual Save
-- Save All ZIP
-- ZIP failure safety
-- Recent Files / Recent Folders
-- clipboard Paste
-- Copy Edited Image
-- drag-and-drop
-- temp file cleanup
-- UI-thread safety
-- startup initialization guards
-- resource/event leaks
-- Git hygiene
-
-==================================================
-CRITICAL REQUIREMENTS
-==================================================
-
-SOURCE FILE SAFETY:
-
-Original user files must NEVER be overwritten or modified.
-
-If source is:
-
-E:\Photos\image.jpeg
-
-saving edited output to that exact canonical path must be blocked.
-
-Clipboard temporary files are different because they are application-owned.
-
-TRANSFORM CONSISTENCY:
-
-Preview
-Card thumbnail
-Copy Edited Image
-Individual Save
-Save All ZIP
-
-must all follow the SAME effective transform semantics.
-
-Do not allow crop/rotation/flip order to differ between preview and export.
-
-BATCH ISOLATION:
-
-Editing one BatchImageItem must never mutate another BatchImageItem.
-
-MEMORY:
-
-Queue cards must not permanently retain full-resolution images unnecessarily.
-
-==================================================
-ROTATE/FLIP CANCEL AUDIT
-==================================================
-
-Specifically inspect RotateFlipEditorWindow.
-
-Establish clearly:
-
-- state when dialog opens
-- temporary preview state
-- committed state
-- behavior of Apply
-- behavior of Cancel
-- behavior of Previous
-- behavior of Next
-- behavior of Apply & Next
-
-If the dialog mutates BatchImageItem before commitment and Cancel cannot correctly restore state, FIX IT.
-
-Add focused tests where practical.
-
-==================================================
-ZIP TESTING
-==================================================
-
-Do not test an imaginary GetUniqueEntryName method.
-
-Test actual observable ZIP output where possible.
-
-Create temporary test files/directories.
-
-Verify archive entries using System.IO.Compression.
-
-Include cases such as:
-
-folderA\image.jpg
-folderB\image.jpg
-
-The ZIP must contain unique names, for example:
-
-image.jpg
-image-2.jpg
-
-or equivalent.
-
-Verify no entry contains:
-- absolute path
-- "../"
-- "..\"
-
-Verify archive can be opened and entries read.
-
-==================================================
-SOURCE OVERWRITE TEST
-==================================================
-
-Verify the application/service prevents saving an edited file over its own original source path.
-
-If this logic is currently UI-only and difficult to test, consider extracting a small reusable path-safety helper/service only if this improves architecture.
-
-Use:
-
-Path.GetFullPath
-
-and Windows case-insensitive comparison.
-
-Do NOT use file locks as protection.
-
-==================================================
-RECENT ITEMS TESTS
-==================================================
-
-Verify:
-
-Recent Files max = 10
-Recent Folders max = 5
-
-Opening same item again moves it to the top.
-
-No duplicates.
-
-Persistence remains per-user.
-
-==================================================
-FINAL BUILD SEQUENCE
-==================================================
-
-After all fixes:
-
-Run each command separately.
-
-1.
-
-dotnet clean "E:\Khubaib\Image Cropper\PrecisionImageCropper.sln"
-
-2.
-
-dotnet restore "E:\Khubaib\Image Cropper\PrecisionImageCropper.sln"
-
-3.
-
-dotnet build -c Release "E:\Khubaib\Image Cropper\PrecisionImageCropper.sln"
-
-4.
+Run separately:
 
 dotnet test -c Release "E:\Khubaib\Image Cropper\PrecisionImageCropper.sln"
 
-5.
-
 dotnet build "E:\Khubaib\Image Cropper\PrecisionImageCropper.sln"
-
-6.
 
 dotnet test "E:\Khubaib\Image Cropper\PrecisionImageCropper.sln"
 
-Do not run overlapping build/test tasks unnecessarily.
-
-Wait for one to finish before starting the next.
+Do not rerun expensive steps unnecessarily.
 
 ==================================================
-GIT RULES
+2. COMPLETE ONLY THE REMAINING AUDIT
+==================================================
+
+Use prompt-for-agy.txt as the authority.
+
+Focus on unresolved/high-risk areas:
+
+- source file overwrite protection
+- independent BatchImageItem edit state
+- crop modal state persistence
+- Rotate/Flip Apply / Cancel / Apply & Next semantics
+- Previous / Next state isolation
+- transform order consistency between:
+  preview
+  thumbnail
+  clipboard
+  individual Save
+  ZIP export
+- output filename correctness
+- ZIP uniqueness / readability / path safety
+- Recent Files max 10
+- Recent Folders max 5
+- clipboard copy/paste behavior
+- drag/drop duplicate handling
+- temporary file cleanup
+- memory/resource leaks
+- UI thread blocking
+- startup initialization guards
+- git hygiene
+
+Do NOT add unrelated features.
+
+If you find a real defect:
+fix it and add a focused test where practical.
+
+==================================================
+3. IMPORTANT EXISTING FIX
+==================================================
+
+Do NOT revert the App.xaml.cs change that replaced raw:
+
+ex.ToString()
+
+with concise user-facing messages.
+
+==================================================
+4. ROTATE/FLIP CHECK
+==================================================
+
+Pay special attention to RotateFlipEditorWindow.
+
+Verify:
+
+- button clicks update temporary live preview
+- Cancel discards uncommitted changes
+- Apply commits
+- Apply & Next commits then moves
+- Previous / Next load the correct item's own state
+- no temporary state leaks between images
+
+Fix if wrong.
+
+==================================================
+5. ZIP CHECK
+==================================================
+
+Verify behavior through public export APIs where possible.
+
+Check:
+
+- duplicate filenames become unique
+- ZIP opens successfully
+- expected entry count
+- no absolute paths
+- no ../ or ..\
+- unedited files included
+- edited files rendered correctly
+
+==================================================
+6. FINAL GIT CHECK
 ==================================================
 
 Run:
 
 git status
 
-before final reporting.
-
-Expected ignored/generated directories:
-
-dist/
-**/bin/
-**/obj/
-
-Do not stage them.
-
-Do not use Git LFS for generated output.
-
-Do not create another branch.
+Verify dist/bin/obj are not tracked.
 
 Do not commit.
-
 Do not push.
 
 ==================================================
-FINAL REPORT
+7. FINAL REPORT
 ==================================================
 
-Continue using the final report format from prompt-for-agy.txt.
+Return only a concise report:
 
-Your final verdict must be exactly one of:
-
+PRE-PHASE-6 AUDIT RESULT:
 READY FOR PHASE 6
-
-or:
-
+or
 DO NOT START PHASE 6 YET
 
-Do not declare READY simply because build/tests pass.
+Include:
 
-READY requires:
+- defects found
+- fixes made
+- files changed
+- Release build result
+- Debug build result
+- Release test result
+- Debug test result
+- total tests passed/failed/skipped
+- remaining manual GUI checks
+- final recommendation
 
-- no unresolved Critical defects
-- no unresolved High defects
-- source overwrite protection verified
-- independent edit states verified
-- transform semantics consistent
-- ZIP behavior safe
-- recent items correct
-- clipboard behavior correct
-- reasonable memory behavior
-- build clean
-- tests passing
-
-Also explicitly report:
-
-1. What work existed when you resumed
-2. What compile/test issue you inherited
-3. How you resolved the GetUniqueEntryName test problem
-4. All defects found
-5. All fixes made
-6. Files modified
-7. Tests added/changed
-8. Final test count
-9. Debug build result
-10. Release build result
-11. Git status
-12. Manual GUI checks still needed
-13. Final verdict
+Do not repeat the entire audit history.
+Be concise.
