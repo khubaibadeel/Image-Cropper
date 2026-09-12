@@ -1,55 +1,1023 @@
-Act as the final independent code reviewer for this existing WPF image-editing application.
-Do not implement new features.
-Inspect the complete PrecisionImageCropper codebase and look specifically for defects introduced by the new batch functionality.
-The intended workflow is:
-multiple images
-→ independent BatchImageItem state
-→ per-image crop modal
-→ per-image rotate/flip modal
-→ light-themed UI
-→ Previous / Next
+You are performing the FINAL PRE-PHASE-6 AUDIT of the existing working PrecisionImageCropper WPF application.
+
+IMPORTANT:
+
+This is an AUDIT + DEFECT-FIXING pass.
+
+DO NOT implement Phase 6.
+DO NOT add unrelated features.
+DO NOT redesign the UI.
+DO NOT rewrite working architecture merely because you prefer another style.
+DO NOT create another Git branch.
+Stay on the existing main working tree.
+DO NOT commit or push unless I explicitly ask.
+
+Project root:
+
+E:\Khubaib\Image Cropper
+
+Existing solution:
+
+E:\Khubaib\Image Cropper\PrecisionImageCropper.sln
+
+The application has already gone through multiple development phases.
+
+Your job is to inspect the COMPLETE current implementation and verify that Phases 1–5 are safe, correct, non-destructive, memory-conscious, internally consistent, and ready for Phase 6 final polish.
+
+==================================================
+AUDIT OBJECTIVE
+==================================================
+
+Verify the complete workflow:
+
+Import one or many images
+→ Batch queue
+→ Independent per-image editing state
+→ Crop modal
+→ Rotate/Flip modal
+→ Previous / Next workflow
 → Apply / Apply & Next
-→ recent 10 files
-→ recent 5 folders
-→ multiple drag/drop
-→ clipboard paste
-→ copy final edited result
-→ individual Save
-→ Save All as ZIP
-Verify these invariants:
-1. Source files are NEVER modified.
-2. Every image has independent edit state.
-3. Cropping one card cannot modify another.
-4. Reopening a Crop modal retains its previous crop.
-5. Rotation uses normalized net rotation.
-6. Two identical flips cancel.
-7. Preview and export use the same transform order.
-8. Crop coordinates remain source-pixel accurate.
-9. EXIF orientation does not cause preview/export mismatch.
-10. Recent files are max 10.
-11. Recent folders are max 5.
-12. Recents persist in user AppData.
-13. Duplicate files cannot enter the queue.
-14. Multi-drop shows no success popup when all imports succeed.
-15. Import failures produce one summary dialog.
-16. Raw clipboard images default to PNG.
-17. Copy Image copies the fully edited result.
-18. Ctrl+C / Ctrl+V inside TextBox controls remain normal text operations.
-19. Save filenames correctly describe net edits.
-20. Unedited images in Save All are included.
-21. Save All creates a valid ZIP with unique entry names.
-22. No full-resolution bitmap is unnecessarily retained for every queue card.
-23. UI remains responsive during ZIP creation.
-24. No unfinished TODO/stub code exists in production paths.
-25. bin, obj and dist remain ignored by Git.
-Run all applicable build/tests.
-Fix real defects you find.
-Do not make stylistic rewrites merely because you prefer a different architecture.
-Do not create another Git branch.
-Work on the existing main working tree.
-At the end provide:
-- defects found
-- fixes made
-- files changed
-- tests run
-- remaining risks requiring manual GUI testing
+→ Recent files/folders
+→ Drag & Drop
+→ Clipboard Paste
+→ Copy Edited Image
+→ Individual Save
+→ Save All ZIP
+
+The application's original source files must NEVER be modified.
+
+==================================================
+A. BUILD BASELINE FIRST
+==================================================
+
+Before editing anything:
+
+1. Run:
+
+git status
+
+2. Record whether the working tree is clean or already contains changes.
+
+3. Run:
+
+dotnet build
+
+4. Run:
+
+dotnet test
+
+Record:
+- build result
+- warning count
+- error count
+- test count
+- failed tests
+- skipped tests
+
+Do NOT assume passing tests mean the application is correct.
+
+Then begin the audit.
+
+==================================================
+B. BATCH ITEM ARCHITECTURE
+==================================================
+
+Inspect BatchImageItem and all related queue models.
+
+Verify every queued image maintains completely independent state for:
+
+- source identity
+- source path
+- original filename
+- original extension
+- original width
+- original height
+- thumbnail
+- crop rectangle
+- selected crop aspect ratio
+- net rotation
+- horizontal flip
+- vertical flip
+- edited state
+- unsaved state
+- clipboard/file source type
+- output naming state
+
+CRITICAL:
+
+Mutating Image A must never mutate Image B.
+
+Look specifically for:
+- static/shared CropRect instances
+- shared mutable BitmapSource state
+- global crop state reused between cards
+- global rotation/flip state reused between cards
+- selected-card assumptions in card button handlers
+
+Add/fix automated tests if needed.
+
+==================================================
+C. MEMORY / LARGE BATCH REVIEW
+==================================================
+
+The app must remain practical with approximately:
+
+20–50 large photographs,
+including 6000x4000 and 8000x6000 JPEG files.
+
+Audit for:
+
+- full-resolution BitmapSource retained permanently per card
+- accidental image duplication in memory
+- CroppedBitmap / TransformedBitmap retaining the complete source image
+- thumbnail generation decoding images at unnecessarily large sizes
+- unbounded Task.Run usage
+- excessive simultaneous decodes
+- unreleased streams
+- file handles left open
+- event handlers keeping removed cards alive
+- clipboard output retaining full-resolution source graphs
+- modal editors retaining images after close
+
+Expected design:
+
+QUEUE:
+lightweight metadata + thumbnail
+
+FULL RESOLUTION:
+load on demand for:
+- crop editor
+- rotate/flip editor
+- copy final image
+- individual save
+- Save All export
+
+Verify thumbnail concurrency throttling still exists and works correctly.
+
+Fix concrete memory problems.
+
+==================================================
+D. IMPORT PIPELINE
+==================================================
+
+Audit ALL import sources:
+
+1. Open Image
+2. Multi-file Open
+3. Recent File
+4. Drag & Drop
+5. Clipboard FileDrop
+6. Raw Clipboard Bitmap
+
+They should use a centralized or semantically consistent import pipeline.
+
+Verify supported formats:
+
+.jpg
+.jpeg
+.png
+.bmp
+.tif
+.tiff
+
+Check:
+
+- corrupt file handling
+- unsupported format handling
+- missing file handling
+- locked file handling
+- duplicate handling
+- EXIF orientation
+- very small images
+- zero/invalid image dimension safety
+
+==================================================
+E. DUPLICATE DETECTION
+==================================================
+
+Duplicate detection must use canonical Windows full paths and case-insensitive comparison.
+
+Examples that must be considered identical:
+
+E:\Photos\image.jpg
+e:\photos\IMAGE.jpg
+
+The same disk file must not enter the queue twice.
+
+Check duplicates from:
+
+- Open dialog
+- Recent Files
+- Drag & Drop
+- clipboard FileDrop
+
+Expected message:
+
+Duplicate "<filename>" detected.
+
+For multi-file imports:
+
+DO NOT show one message per failure.
+
+Show one summary only when failures exist.
+
+If all imports succeed:
+
+NO success popup.
+
+Verify removal correctly removes the file from the duplicate-tracking collection.
+
+Then re-adding the same file after removal should be allowed.
+
+==================================================
+F. QUEUE REMOVAL
+==================================================
+
+Every Remove action must ask confirmation first.
+
+Removing a queue item must:
+
+- remove only that queue item
+- NEVER delete the original disk file
+- remove its duplicate-detection registration
+- update selected item safely
+- release image/editor resources
+- delete temporary clipboard file only if it is genuinely application-owned temporary data
+
+Audit cleanup during:
+
+- card removal
+- application shutdown
+
+==================================================
+G. SOURCE FILE PROTECTION — CRITICAL
+==================================================
+
+THIS IS A HARD REQUIREMENT.
+
+The application must NEVER overwrite or modify the original source image.
+
+Audit all save paths.
+
+If a file-origin BatchImageItem source is:
+
+E:\Photos\image.jpeg
+
+the application must reject saving the edited output to exactly:
+
+E:\Photos\image.jpeg
+
+Use canonical path comparison with Windows case-insensitive semantics.
+
+Expected message:
+
+"The original image cannot be overwritten. Please choose a different filename or location."
+
+This protection must apply to:
+
+- individual Save
+- any Save As path
+- any alternate format selection that resolves to the same physical source path
+
+Clipboard-origin images have no protected source file.
+
+Do NOT use file locking as the overwrite-prevention mechanism.
+
+The original input file should be closed after decoding.
+
+Add automated tests if the protection is testable.
+
+==================================================
+H. CROP EDITOR AUDIT
+==================================================
+
+Inspect the per-image crop modal carefully.
+
+Verify it supports the same accurate controls as the original crop engine:
+
+- crop rectangle
+- Width
+- Height
+- X
+- Y
+- FreeForm
+- Original
+- 1:1
+- 4:3
+- 3:2
+- 16:9
+- 9:16
+- 5:4
+- 4:5
+- A4 Portrait
+- A4 Landscape
+- Custom
+- Reset
+- mouse move
+- 8 resize handles
+
+CRITICAL:
+
+Crop coordinates must remain in ORIGINAL SOURCE PIXELS or in the project's explicitly standardized oriented-image coordinate system.
+
+Screen/display coordinates must never silently become export coordinates.
+
+Check:
+
+- zoom
+- image fit
+- non-integer scale factors
+- boundary clamps
+- very small crop
+- full-image crop
+- right/bottom edge
+- rotated image crop
+- flipped image crop
+
+Verify reopening an image's Crop modal restores that image's previous crop state.
+
+Cancel must discard temporary modal changes.
+
+Apply must persist only to that BatchImageItem.
+
+==================================================
+I. ROTATE / FLIP EDITOR AUDIT
+==================================================
+
+Verify Rotate/Flip modal supports:
+
+- Clockwise 90°
+- Counter-clockwise 90°
+- Horizontal flip
+- Vertical flip
+- live preview
+- Apply
+- Cancel
+- Apply & Next
+- Previous
+- Next
+
+Rotation must use normalized NET state.
+
+Expected:
+
+CW x1 = 90
+CW x2 = 180
+CW x3 = 270 / equivalent CCW 90
+CW x4 = 0
+
+Two horizontal flips = no horizontal flip.
+
+Two vertical flips = no vertical flip.
+
+Cancel must restore the state present when the modal opened.
+
+No destructive bitmap rewriting should happen for every button press.
+
+==================================================
+J. TRANSFORM ORDER — CRITICAL
+==================================================
+
+Determine the exact standardized rendering order currently used.
+
+It must be deterministic and consistent for:
+
+1. editor preview
+2. card thumbnail
+3. Copy Edited Image
+4. individual Save
+5. Save All ZIP
+
+Inspect whether the chosen pipeline is something like:
+
+EXIF normalization
+→ rotation
+→ flips
+→ crop
+
+or:
+
+EXIF normalization
+→ crop
+→ rotation
+→ flips
+
+Either can be acceptable if the crop state is defined correctly and every output path uses exactly the same semantics.
+
+What is NOT acceptable:
+
+preview uses one transform order
+but save uses another.
+
+Test combinations:
+
+crop only
+CW only
+CCW only
+180 only
+horizontal flip only
+vertical flip only
+crop + CW
+crop + CCW
+crop + horizontal flip
+crop + vertical flip
+crop + rotate + horizontal flip
+crop + rotate + both flips
+
+Verify output dimensions and visual orientation where testable.
+
+==================================================
+K. PREVIOUS / NEXT EDITING WORKFLOW
+==================================================
+
+Audit Previous / Next behavior in both editing dialogs.
+
+Verify:
+
+- Previous disabled on first queue item
+- Next disabled on last queue item
+- navigation uses queue order
+- opening next item loads THAT item's own edit state
+- previous item's state does not leak
+
+If unsaved modal changes exist:
+
+Apply & Next must apply correctly.
+
+If the UI also supports navigating without Apply, verify the behavior is explicit and safe.
+
+No silent data loss.
+
+==================================================
+L. OUTPUT FILENAME GENERATION
+==================================================
+
+Audit the centralized filename-generation logic.
+
+Original filename and extension should be preserved.
+
+Examples:
+
+image.png
+unchanged:
+image.png
+
+crop:
+image-cropped.png
+
+CW:
+image-rotated-clockwise.png
+
+CCW:
+image-rotated-counterclockwise.png
+
+180:
+image-rotated-180.png
+
+horizontal:
+image-flipped-horizontal.png
+
+vertical:
+image-flipped-vertical.png
+
+combined example:
+
+image-cropped-rotated-counterclockwise-flipped-horizontal.png
+
+Descriptor ordering must be deterministic:
+
+-cropped
+-rotated-...
+-flipped-horizontal
+-flipped-vertical
+
+No duplicate descriptors.
+
+Net transform state determines the filename.
+
+Do NOT describe cancelled-out operations.
+
+Example:
+
+four clockwise rotations:
+image.png
+
+NOT:
+image-rotated-clockwise-rotated-clockwise...
+
+Two horizontal flips:
+no flip suffix.
+
+Verify .jpg remains .jpg
+.jpeg remains .jpeg
+.png remains .png
+.bmp remains .bmp
+.tif/.tiff remain appropriately preserved.
+
+Raw clipboard images default to PNG.
+
+==================================================
+M. INDIVIDUAL SAVE
+==================================================
+
+Audit per-card Save.
+
+Verify:
+
+- correct generated filename
+- correct original-format default
+- Save As allows supported alternate output type
+- encoder matches FINAL extension
+- JPEG quality field respected
+- PNG transparency preserved
+- source file protection enforced
+- source dimensions/crop dimensions correct
+- original source file untouched
+
+No unnecessary re-encoding for completely unedited files where a safe byte copy is appropriate.
+
+==================================================
+N. SAVE ALL ZIP
+==================================================
+
+Audit Save All thoroughly.
+
+Expected:
+
+Save All creates ONE ZIP archive.
+
+Suggested default:
+
+PrecisionImageCropper-YYYY-MM-DD-HHmm.zip
+
+User can rename it.
+
+ZIP must contain ALL queue items.
+
+Unedited images:
+include original image bytes unchanged where practical.
+
+Edited images:
+include fully rendered edited image.
+
+No unnecessary containing directory inside ZIP.
+
+Opening archive should directly show:
+
+image.jpg
+photo-cropped.jpeg
+scan-rotated-clockwise.png
+
+etc.
+
+==================================================
+O. ZIP SAFETY
+==================================================
+
+Verify:
+
+- unique ZIP entry names
+- files from different directories with same basename do not overwrite each other
+- duplicate output names get suffix such as -2
+- no absolute paths inside ZIP
+- no ".." traversal segments
+- basenames sanitized
+- ZIP remains readable
+
+Audit failure behavior.
+
+Recommended:
+
+write to temporary ZIP
+→ finish all entries
+→ close successfully
+→ move/rename to final requested ZIP
+
+If export fails:
+
+- incomplete archive must not appear as a valid successful output
+- temporary archive should be deleted
+- failure should identify problematic image where possible
+
+==================================================
+P. SAVE ALL PERFORMANCE
+==================================================
+
+Save All must not freeze the UI.
+
+Audit:
+
+- Task.Run/background work
+- progress updates
+- dispatcher usage
+- cancellation if currently implemented
+- memory usage
+- streaming into ZIP entries
+- temporary files
+- repeated decode/encode work
+
+The UI should remain responsive.
+
+Verify progress such as:
+
+Saving 7 of 24...
+
+if implemented.
+
+==================================================
+Q. RECENT FILES / FOLDERS
+==================================================
+
+Audit persistence.
+
+Expected:
+
+Recent Files:
+maximum 10
+
+Recent Folders:
+maximum 5
+
+Newest first.
+
+Opening the same file/folder again moves it to the top rather than duplicating it.
+
+Recent state persists across restart.
+
+Data should be stored under the current Windows user's AppData or another appropriate per-user location.
+
+Do NOT require Administrator privileges.
+
+Click Recent File:
+add to existing queue.
+
+Do NOT replace queue.
+
+Click Recent Folder:
+open file picker inside that folder.
+
+Do NOT auto-import the entire folder.
+
+Missing/stale recent files must be handled safely.
+
+==================================================
+R. CLIPBOARD PASTE
+==================================================
+
+Verify:
+
+Clipboard FileDrop:
+preserves original file path/name/extension.
+
+Raw clipboard bitmap:
+creates application-owned temporary image safely.
+
+Suggested names:
+
+Clipboard-1.png
+Clipboard-2.png
+
+No naming collisions.
+
+If clipboard unavailable/locked:
+retry briefly or show concise failure.
+
+No crash.
+
+Ctrl+V inside a TextBox:
+normal text paste.
+
+Ctrl+V outside text editing:
+image paste.
+
+==================================================
+S. COPY EDITED IMAGE
+==================================================
+
+Each card's Copy Edited Image must copy the COMPLETE final edited result:
+
+EXIF normalization
++ rotation
++ flips
++ crop
+
+according to the standardized pipeline.
+
+Do not copy the original image accidentally.
+
+Clipboard output must not unnecessarily pin the full-resolution original bitmap.
+
+Retry clipboard writes if CLIPBRD_E_CANT_OPEN occurs.
+
+Ctrl+C inside TextBox:
+normal text copy.
+
+==================================================
+T. DRAG & DROP
+==================================================
+
+Verify:
+
+- one image drop
+- multi-image drop
+- duplicates
+- corrupt image
+- unsupported file
+- combination of success and failure
+
+If all imports succeed:
+NO popup.
+
+If failures exist:
+ONE failure summary only.
+
+==================================================
+U. SETTINGS / TEMP FILE SAFETY
+==================================================
+
+Audit:
+
+- settings location
+- recent-state JSON
+- temp clipboard directory
+- stale temporary files
+- app shutdown cleanup
+- simultaneous application launch behavior where relevant
+- exceptions if AppData/temp path unavailable
+
+Never delete arbitrary user files.
+
+Only delete files that the application itself created as temporary files.
+
+==================================================
+V. THREADING / UI SAFETY
+==================================================
+
+Look for:
+
+Thread.Sleep
+
+inside UI paths.
+
+Replace with:
+
+await Task.Delay
+
+where appropriate.
+
+Audit background threads accessing WPF UI controls directly.
+
+All UI updates must occur safely on the Dispatcher/UI thread.
+
+Freeze BitmapSource instances used across threads where required.
+
+Look for async void usage.
+
+Event handlers may be async void where appropriate, but service methods should generally return Task.
+
+Look for fire-and-forget Tasks that hide exceptions.
+
+==================================================
+W. ERROR HANDLING
+==================================================
+
+The application must not crash for expected user/data errors.
+
+Audit:
+
+- corrupt images
+- unsupported formats
+- invalid crop dimensions
+- inaccessible files
+- missing files
+- invalid save path
+- access denied
+- disk full
+- clipboard locked
+- ZIP failure
+- invalid recent entries
+- temporary file failure
+- source file moved while queued
+- file locked by another app
+
+Messages should be concise.
+
+Do not expose giant raw stack traces to normal users.
+
+==================================================
+X. STARTUP INITIALIZATION
+==================================================
+
+The original application previously had startup crashes caused by XAML TextChanged / SelectionChanged events firing during InitializeComponent().
+
+Verify the current application still safely handles startup.
+
+Do NOT remove existing:
+
+_isInitializing
+_updatingControls
+
+or equivalent guards without replacing them with an equally safe architecture.
+
+Check all modal initialization for the same category of bug.
+
+==================================================
+Y. RESOURCE / EVENT LEAK REVIEW
+==================================================
+
+Inspect:
+
+- window/dialog subscriptions
+- card event handlers
+- CropChanged events
+- modal close behavior
+- CancellationTokenSource disposal
+- file streams
+- temporary bitmap references
+- ObservableCollection subscriptions
+
+Removed items and closed dialogs should be collectible.
+
+==================================================
+Z. GIT HYGIENE
+==================================================
+
+Run:
+
+git status
+
+Verify these are NOT tracked:
+
+dist/
+**/bin/
+**/obj/
+
+Verify .gitignore handles them.
+
+Do not add generated binaries to Git.
+
+Do NOT use Git LFS for:
+- build output
+- dist executable
+- bin
+- obj
+
+Do NOT create another branch.
+
+Remain on main.
+
+DO NOT push.
+
+==================================================
+AUTOMATED TEST EXPANSION
+==================================================
+
+Review existing tests.
+
+Add focused tests where valuable for:
+
+1. independent BatchImageItem state
+2. crop boundary math
+3. zero dimensions safety
+4. rotation normalization
+5. flip cancellation
+6. filename generation
+7. crop + rotate dimensions
+8. crop + flip behavior
+9. source overwrite prevention
+10. duplicate path handling
+11. recent file maximum 10
+12. recent folder maximum 5
+13. recent de-duplication
+14. ZIP unique names
+15. ZIP expected entry count
+16. ZIP readability
+17. raw clipboard output extension behavior where testable
+18. unedited file inclusion behavior
+19. render pipeline consistency where testable
+
+Do not add meaningless tests just to increase test count.
+
+==================================================
+FINAL BUILD VERIFICATION
+==================================================
+
+After fixes:
+
+Run:
+
+dotnet clean
+
+dotnet restore
+
+dotnet build -c Release
+
+dotnet test -c Release
+
+Then also run:
+
+dotnet build
+
+dotnet test
+
+There must be:
+
+0 build errors.
+
+Prefer:
+0 warnings from application code.
+
+If warnings remain, identify them and explain why.
+
+==================================================
+MANUAL GUI TEST PLAN
+==================================================
+
+Do NOT falsely claim a GUI behavior was verified if you could not interact with it.
+
+At the end provide a short MANUAL VERIFICATION CHECKLIST for me covering anything that automated tests cannot prove.
+
+Include at minimum:
+
+- multi-select import
+- drag 10 files
+- duplicate warning
+- crop 3 different images differently
+- reopen each Crop modal
+- rotate one image
+- flip another
+- Apply & Next
+- Previous / Next
+- Recent Files
+- Recent Folders
+- restart persistence
+- clipboard paste
+- Copy Edited Image
+- individual Save
+- source overwrite rejection
+- Save All ZIP
+- inspect ZIP filenames
+- extract ZIP
+- visually compare exported images with previews
+- large batch responsiveness
+
+==================================================
+FINAL AUDIT REPORT FORMAT
+==================================================
+
+Return a structured final report:
+
+PRE-PHASE-6 AUDIT RESULT:
+PASS / PASS WITH NOTES / NOT READY
+
+1. Initial build/test status
+2. Defects found
+3. Severity of each defect:
+   - Critical
+   - High
+   - Medium
+   - Low
+4. Fixes made
+5. Files modified
+6. Tests added/modified
+7. Final Debug build result
+8. Final Release build result
+9. Final test result
+10. Total tests passed/failed/skipped
+11. Memory/performance findings
+12. Source-file safety result
+13. Crop/transform consistency result
+14. ZIP export safety result
+15. Recent-files persistence result
+16. Clipboard result
+17. Git hygiene result
+18. Remaining risks
+19. Manual verification checklist
+20. Exact recommendation:
+
+Either:
+
+"READY FOR PHASE 6"
+
+or:
+
+"DO NOT START PHASE 6 YET"
+
+with specific reasons.
+
+==================================================
+FINAL RULE
+==================================================
+
+Do not declare the application READY FOR PHASE 6 merely because it compiles.
+
+Only declare READY if:
+
+- architecture is sound
+- source files are protected
+- per-image state is isolated
+- render semantics are consistent
+- Save/ZIP behavior is safe
+- memory usage is reasonable
+- tests pass
+- no unresolved Critical or High defects remain.
