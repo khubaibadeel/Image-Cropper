@@ -26,8 +26,10 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = _viewModel;
+        _viewModel.PropertyChanged += ViewModel_PropertyChanged;
         _recentFolder = _settings.RecentFolders.FirstOrDefault();
         RebuildRecentMenu();
+        UpdateSaveAllState();
         _isInitializing = false;
     }
 
@@ -371,7 +373,7 @@ public partial class MainWindow : Window
 
         var exportItems = _viewModel.BatchItems.ToList();
         _exportCancellation = new CancellationTokenSource();
-        SaveAllButton.IsEnabled = false;
+        UpdateSaveAllState();
         CancelExportButton.Visibility = Visibility.Visible;
         var progress = new Progress<ZipExportProgress>(value => ExportProgressText.Text = $"Saving {value.Current} of {value.Total}...");
         try
@@ -398,12 +400,20 @@ public partial class MainWindow : Window
         {
             _exportCancellation.Dispose();
             _exportCancellation = null;
-            SaveAllButton.IsEnabled = true;
+            UpdateSaveAllState();
             CancelExportButton.Visibility = Visibility.Collapsed;
         }
     }
 
     private void CancelExport_Click(object sender, RoutedEventArgs e) => _exportCancellation?.Cancel();
+
+    private void ViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainViewModel.QueueIsEmpty))
+            UpdateSaveAllState();
+    }
+
+    private void UpdateSaveAllState() => SaveAllButton.IsEnabled = !_viewModel.QueueIsEmpty && _exportCancellation is null;
 
     private async void Window_Drop(object sender, DragEventArgs e)
     {
