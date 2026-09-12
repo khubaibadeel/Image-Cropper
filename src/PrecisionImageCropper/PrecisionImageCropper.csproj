@@ -14,4 +14,7 @@
     <PublishSingleFile>true</PublishSingleFile>
     <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="PrecisionImageCropper.Tests" />
+  </ItemGroup>
 </Project>
