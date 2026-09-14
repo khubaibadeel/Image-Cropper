@@ -2,9 +2,6 @@
 **/bin/
 **/obj/
 
-# Published executable
-dist/
-
 # Visual Studio
 .vs/
 *.user

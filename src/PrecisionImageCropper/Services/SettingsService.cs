@@ -4,11 +4,17 @@ using System.Text.Json;
 
 namespace PrecisionImageCropper.Services;
 
+public sealed record RecentCropSize(int Width, int Height)
+{
+    public override string ToString() => $"{Width:N0} × {Height:N0}";
+}
+
 /// <summary>Stores lightweight per-user UI history outside the application directory.</summary>
 public sealed class SettingsService
 {
     private const int RecentFileLimit = 10;
     private const int RecentFolderLimit = 5;
+    private const int RecentCropSizeLimit = 5;
     private readonly string _settingsPath;
     private SettingsData _settings;
 
@@ -23,6 +29,7 @@ public sealed class SettingsService
 
     public IReadOnlyList<string> RecentFiles => _settings.RecentFiles.AsReadOnly();
     public IReadOnlyList<string> RecentFolders => _settings.RecentFolders.AsReadOnly();
+    public IReadOnlyList<RecentCropSize> RecentCropSizes => _settings.RecentCropSizes.AsReadOnly();
 
     public void RecordOpenedFile(string path)
     {
@@ -55,6 +62,20 @@ public sealed class SettingsService
         if (RemoveMatching(_settings.RecentFolders, path)) Save();
     }
 
+    public void RecordCropSize(double width, double height)
+    {
+        var roundedWidth = (int)Math.Round(width);
+        var roundedHeight = (int)Math.Round(height);
+        if (roundedWidth < 1 || roundedHeight < 1) return;
+
+        _settings.RecentCropSizes.RemoveAll(size =>
+            size.Width == roundedWidth && size.Height == roundedHeight);
+        _settings.RecentCropSizes.Insert(0, new RecentCropSize(roundedWidth, roundedHeight));
+        if (_settings.RecentCropSizes.Count > RecentCropSizeLimit)
+            _settings.RecentCropSizes.RemoveRange(RecentCropSizeLimit, _settings.RecentCropSizes.Count - RecentCropSizeLimit);
+        Save();
+    }
+
     private SettingsData Load()
     {
         try
@@ -64,8 +85,14 @@ public sealed class SettingsService
             var loaded = JsonSerializer.Deserialize<SettingsData>(json) ?? new SettingsData();
             loaded.RecentFiles ??= [];
             loaded.RecentFolders ??= [];
+            loaded.RecentCropSizes ??= [];
             Normalize(loaded.RecentFiles, RecentFileLimit);
             Normalize(loaded.RecentFolders, RecentFolderLimit);
+            loaded.RecentCropSizes = loaded.RecentCropSizes
+                .Where(size => size.Width > 0 && size.Height > 0)
+                .Distinct()
+                .Take(RecentCropSizeLimit)
+                .ToList();
             return loaded;
         }
         catch
@@ -128,5 +155,6 @@ public sealed class SettingsService
     {
         public List<string> RecentFiles { get; set; } = [];
         public List<string> RecentFolders { get; set; } = [];
+        public List<RecentCropSize> RecentCropSizes { get; set; } = [];
     }
 }

@@ -135,9 +135,11 @@ public partial class RotateFlipEditorWindow : Window
     {
         try
         {
+            var before = _item.CaptureEditState();
             _item.NetRotation = _draftRotation;
             _item.HorizontalFlip = _draftHorizontalFlip;
             _item.VerticalFlip = _draftVerticalFlip;
+            _item.CommitEdit(before);
             await _refreshThumbnailAsync(_item);
             _openedRotation = _draftRotation;
             _openedHorizontalFlip = _draftHorizontalFlip;

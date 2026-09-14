@@ -8,6 +8,7 @@ using System.Windows.Media.Imaging;
 using PrecisionImageCropper.Models;
 using PrecisionImageCropper.Services;
 using PrecisionImageCropper.ViewModels;
+using PrecisionImageCropper.Dialogs;
 
 namespace PrecisionImageCropper;
 
@@ -30,6 +31,7 @@ public partial class MainWindow : Window
         _recentFolder = _settings.RecentFolders.FirstOrDefault();
         RebuildRecentMenu();
         UpdateSaveAllState();
+        UpdateCommandState();
         _isInitializing = false;
     }
 
@@ -105,13 +107,8 @@ public partial class MainWindow : Window
 
         if (failures.Count > 0)
         {
-            var heading = failures.Count == 1 ? "1 file was not added:" : $"{failures.Count} files were not added:";
-            MessageBox.Show(
-                this,
-                heading + "\n\n" + string.Join("\n", failures.Select(f => $"• {f}")),
-                Title,
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            var heading = failures.Count == 1 ? "Image was not added" : "Some images were not added";
+            AppDialogWindow.ShowNotice(this, heading, string.Join("\n", failures.Select(f => $"• {f}")));
         }
     }
 
@@ -231,7 +228,11 @@ public partial class MainWindow : Window
             return;
         }
 
-        MessageBox.Show(this, "No supported image was found on the clipboard.", Title, MessageBoxButton.OK, MessageBoxImage.Information);
+        AppDialogWindow.ShowNotice(
+            this,
+            "No image found",
+            "No supported image was found on the clipboard.",
+            "Copy a JPG, PNG, BMP, or TIFF image and try again.");
     }
 
     private void CropItem_Click(object sender, RoutedEventArgs e)
@@ -244,6 +245,7 @@ public partial class MainWindow : Window
             Owner = this
         };
         editor.ShowDialog();
+        UpdateCommandState();
     }
 
     private void RotateFlipItem_Click(object sender, RoutedEventArgs e)
@@ -253,6 +255,7 @@ public partial class MainWindow : Window
         _viewModel.SelectedBatchItem = item;
         var editor = new RotateFlipEditorWindow(this, _viewModel.BatchItems, item, RefreshThumbnailAsync);
         editor.ShowDialog();
+        UpdateCommandState();
     }
 
     private void ExplainEditorPhase(string feature)
@@ -324,7 +327,8 @@ public partial class MainWindow : Window
         {
             Mouse.OverrideCursor = Cursors.Wait;
             await Task.Run(() => ImageRenderService.SaveFinal(item, outputPath));
-            item.StatusMessage = "Saved";
+            item.StatusMessage = "Exported";
+            ShowStatus($"Exported • {Path.GetExtension(outputPath).TrimStart('.').ToUpperInvariant()} • {item.OutputDimensionsText}");
         }
         catch (Exception ex)
         {
@@ -339,14 +343,11 @@ public partial class MainWindow : Window
     private void RemoveItem_Click(object sender, RoutedEventArgs e)
     {
         if (!TryGetItem(sender, out var item)) return;
-        var result = MessageBox.Show(
-            this,
-            $"Remove \"{item.OriginalFileName}\" from the batch?\n\nThe original file will not be deleted.",
-            Title,
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning,
-            MessageBoxResult.No);
-        if (result != MessageBoxResult.Yes) return;
+        if (!AppDialogWindow.Confirm(
+                this,
+                "Remove image?",
+                $"Remove \"{item.OriginalFileName}\" from the batch?",
+                "The original file will not be deleted.")) return;
 
         _viewModel.BatchItems.Remove(item);
         if (item.OriginalFilePath is not null)
@@ -380,7 +381,8 @@ public partial class MainWindow : Window
         {
             await BatchZipExportService.ExportAsync(exportItems, outputPath, progress, _exportCancellation.Token);
             ExportProgressText.Text = string.Empty;
-            MessageBox.Show(this, $"{exportItems.Count} images saved successfully.", Title, MessageBoxButton.OK, MessageBoxImage.Information);
+            var formats = exportItems.Select(item => item.OriginalExtension.TrimStart('.').ToUpperInvariant()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            ShowStatus($"{exportItems.Count} images exported • {string.Join(", ", formats)}");
         }
         catch (OperationCanceledException)
         {
@@ -409,11 +411,80 @@ public partial class MainWindow : Window
 
     private void ViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(MainViewModel.QueueIsEmpty))
+        if (e.PropertyName is nameof(MainViewModel.QueueIsEmpty) or nameof(MainViewModel.SelectedBatchItem))
+        {
             UpdateSaveAllState();
+            UpdateCommandState();
+        }
     }
 
     private void UpdateSaveAllState() => SaveAllButton.IsEnabled = !_viewModel.QueueIsEmpty && _exportCancellation is null;
+
+    private void UpdateCommandState()
+    {
+        var item = _viewModel.SelectedBatchItem;
+        var hasItem = item is not null;
+        UndoButton.IsEnabled = item?.CanUndo == true;
+        RedoButton.IsEnabled = item?.CanRedo == true;
+        ResetButton.IsEnabled = item?.HasUnsavedChanges == true;
+        CropButton.IsEnabled = hasItem;
+        RotateButton.IsEnabled = hasItem;
+        CopyButton.IsEnabled = hasItem;
+        SaveButton.IsEnabled = hasItem;
+        RemoveButton.IsEnabled = hasItem;
+        ZoomControls.Visibility = hasItem ? Visibility.Visible : Visibility.Collapsed;
+        if (item is null)
+        {
+            SelectedImageText.Text = "Select an image to crop, rotate, copy, or export.";
+            StatusBarText.Text = "Open images or paste from the clipboard.";
+        }
+        else
+        {
+            SelectedImageText.Text = $"{item.OriginalDimensionsText}\n{item.EditStateText}\nOutput {item.OutputDimensionsText}";
+            StatusBarText.Text = $"{item.OriginalDimensionsText}  |  {item.OriginalExtension.TrimStart('.').ToUpperInvariant()}  |  Crop {item.CropRectangle.Width:0} × {item.CropRectangle.Height:0}";
+        }
+    }
+
+    private void ShowStatus(string message)
+    {
+        StatusBarText.Text = message;
+        ExportProgressText.Text = string.Empty;
+    }
+
+    private void CropSelected_Click(object sender, RoutedEventArgs e) => CropItem_Click(new Button { Tag = _viewModel.SelectedBatchItem }, e);
+    private void RotateSelected_Click(object sender, RoutedEventArgs e) => RotateFlipItem_Click(new Button { Tag = _viewModel.SelectedBatchItem }, e);
+    private void CopySelected_Click(object sender, RoutedEventArgs e) => CopyItem_Click(new Button { Tag = _viewModel.SelectedBatchItem }, e);
+    private void SaveSelected_Click(object sender, RoutedEventArgs e) => SaveItem_Click(new Button { Tag = _viewModel.SelectedBatchItem }, e);
+    private void RemoveSelected_Click(object sender, RoutedEventArgs e) => RemoveItem_Click(new Button { Tag = _viewModel.SelectedBatchItem }, e);
+
+    private async void Undo_Click(object sender, RoutedEventArgs e)
+    {
+        var item = _viewModel.SelectedBatchItem;
+        if (item is null || !item.Undo()) return;
+        await RefreshThumbnailAsync(item);
+        ShowStatus("Undid last edit.");
+        UpdateCommandState();
+    }
+
+    private async void Redo_Click(object sender, RoutedEventArgs e)
+    {
+        var item = _viewModel.SelectedBatchItem;
+        if (item is null || !item.Redo()) return;
+        await RefreshThumbnailAsync(item);
+        ShowStatus("Redid last edit.");
+        UpdateCommandState();
+    }
+
+    private async void Reset_Click(object sender, RoutedEventArgs e)
+    {
+        var item = _viewModel.SelectedBatchItem;
+        if (item is null) return;
+        var hadEdits = item.HasUnsavedChanges;
+        item.ResetEdits();
+        await RefreshThumbnailAsync(item);
+        ShowStatus(hadEdits ? "Reset selected image. Ctrl+Z restores the previous edit." : "Selected image is already reset.");
+        UpdateCommandState();
+    }
 
     private async void Window_Drop(object sender, DragEventArgs e)
     {
@@ -449,6 +520,26 @@ public partial class MainWindow : Window
         {
             var button = new Button { Tag = _viewModel.SelectedBatchItem };
             SaveItem_Click(button, e);
+            e.Handled = true;
+        }
+        else if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.Z)
+        {
+            Undo_Click(this, e);
+            e.Handled = true;
+        }
+        else if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.Y)
+        {
+            Redo_Click(this, e);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Delete && Keyboard.Modifiers == ModifierKeys.None && _viewModel.SelectedBatchItem is not null)
+        {
+            RemoveItem_Click(new Button { Tag = _viewModel.SelectedBatchItem }, e);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Delete && Keyboard.Modifiers == ModifierKeys.Control && _viewModel.BatchItems.Count > 0)
+        {
+            RemoveAllItems();
             e.Handled = true;
         }
     }
@@ -504,13 +595,13 @@ public partial class MainWindow : Window
         {
             _settings.RemoveRecentFile(path);
             RebuildRecentMenu();
-            MessageBox.Show(this, $"Recent file \"{fileName}\" is no longer available.", Title, MessageBoxButton.OK, MessageBoxImage.Information);
+            AppDialogWindow.ShowNotice(this, "Recent file unavailable", $"\"{fileName}\" is no longer available.");
             return;
         }
 
         if (_queuedFilePaths.Contains(path))
         {
-            MessageBox.Show(this, $"Duplicate \"{fileName}\" detected.", Title, MessageBoxButton.OK, MessageBoxImage.Information);
+            AppDialogWindow.ShowNotice(this, "Duplicate image", $"\"{fileName}\" is already in the batch.", "This file was not added.");
             return;
         }
 
@@ -524,7 +615,7 @@ public partial class MainWindow : Window
         {
             _settings.RemoveRecentFolder(path);
             RebuildRecentMenu();
-            MessageBox.Show(this, "The recent folder is no longer available.", Title, MessageBoxButton.OK, MessageBoxImage.Information);
+            AppDialogWindow.ShowNotice(this, "Recent folder unavailable", "The recent folder is no longer available.");
             return;
         }
 
@@ -533,7 +624,27 @@ public partial class MainWindow : Window
     }
 
     private void ShowError(string title, Exception error) =>
-        MessageBox.Show(this, $"{title}.\n\n{error.Message}", Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        AppDialogWindow.ShowError(this, title, error.Message);
+
+    private void RemoveAllItems()
+    {
+        var count = _viewModel.BatchItems.Count;
+        if (count == 0 || !AppDialogWindow.Confirm(
+                this,
+                "Remove all images?",
+                $"Remove all {count} images from the current batch?",
+                "The original files will not be deleted.",
+                "Remove All")) return;
+
+        foreach (var item in _viewModel.BatchItems.Where(item => item.ImportSource == ImageImportSource.Clipboard).ToList())
+        {
+            try { if (File.Exists(item.SourceDataPath)) File.Delete(item.SourceDataPath); } catch { }
+        }
+        _viewModel.BatchItems.Clear();
+        _queuedFilePaths.Clear();
+        ShowStatus("Ready — open images or paste from the clipboard.");
+        UpdateCommandState();
+    }
 
     protected override void OnClosed(EventArgs e)
     {

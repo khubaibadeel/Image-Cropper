@@ -19,6 +19,8 @@ public sealed class CropAdorner : FrameworkElement
     private double _scale = 1;
 
     public event EventHandler<CropRect>? CropChanged;
+    public event EventHandler? CropOperationStarted;
+    public event EventHandler<CropRect>? CropOperationCompleted;
     public CropRect Crop { get => _crop.Clone(); set { _crop = value.Clone(); InvalidateVisual(); } }
     public double SourceWidth { get => _sourceWidth; set { _sourceWidth = value; InvalidateVisual(); } }
     public double SourceHeight { get => _sourceHeight; set { _sourceHeight = value; InvalidateVisual(); } }
@@ -38,13 +40,24 @@ public sealed class CropAdorner : FrameworkElement
         if (_sourceWidth <= 0 || _sourceHeight <= 0 || _crop.Width <= 0 || _crop.Height <= 0) return;
         var all = new Rect(0, 0, ActualWidth, ActualHeight);
         var selection = CoordinateConverter.ImageToDisplay(_crop, _scale);
+        // Transparent (rather than null) creates a complete crop-body hit target.
+        // Grid lines below are only drawn, so they can never own input.
+        dc.DrawRectangle(Brushes.Transparent, null, all);
         var mask = new GeometryGroup { FillRule = FillRule.EvenOdd };
         mask.Children.Add(new RectangleGeometry(all));
         mask.Children.Add(new RectangleGeometry(selection));
         dc.DrawGeometry(new SolidColorBrush(Color.FromArgb(145, 0, 0, 0)), null, mask);
         dc.DrawRectangle(null, new Pen(Brushes.White, 1.5), selection);
-        foreach (var point in HandlePoints(selection))
-            dc.DrawRectangle(Brushes.White, new Pen(Brushes.Black, 1), new Rect(point.X - 4, point.Y - 4, 8, 8));
+        var gridPen = new Pen(new SolidColorBrush(Color.FromArgb(130, 255, 255, 255)), 1);
+        for (var division = 1; division <= 2; division++)
+        {
+            var x = selection.Left + selection.Width * division / 3;
+            var y = selection.Top + selection.Height * division / 3;
+            dc.DrawLine(gridPen, new Point(x, selection.Top), new Point(x, selection.Bottom));
+            dc.DrawLine(gridPen, new Point(selection.Left, y), new Point(selection.Right, y));
+        }
+        foreach (var point in CropInteractionGeometry.HandlePoints(selection))
+            dc.DrawRectangle(Brushes.White, new Pen(Brushes.Black, 1), new Rect(point.X - 3.5, point.Y - 3.5, 7, 7));
     }
 
     protected override void OnMouseDown(MouseButtonEventArgs e)
@@ -55,6 +68,7 @@ public sealed class CropAdorner : FrameworkElement
         _startCrop = _crop.Clone();
         _mode = GetDragMode(_startPoint);
         CaptureMouse();
+        CropOperationStarted?.Invoke(this, EventArgs.Empty);
         e.Handled = true;
     }
 
@@ -86,6 +100,7 @@ public sealed class CropAdorner : FrameworkElement
         if (_mode == DragMode.None || e.ChangedButton != MouseButton.Left) return;
         _mode = DragMode.None;
         ReleaseMouseCapture();
+        CropOperationCompleted?.Invoke(this, _crop.Clone());
         e.Handled = true;
     }
 
@@ -97,6 +112,7 @@ public sealed class CropAdorner : FrameworkElement
         ReleaseMouseCapture();
         InvalidateVisual();
         CropChanged?.Invoke(this, _crop.Clone());
+        CropOperationCompleted?.Invoke(this, _crop.Clone());
         return true;
     }
 
@@ -188,15 +204,21 @@ public sealed class CropAdorner : FrameworkElement
     private DragMode GetDragMode(Point point)
     {
         var r = CoordinateConverter.ImageToDisplay(_crop, _scale);
-        const double hit = 9;
-        var handles = HandlePoints(r).ToArray();
-        var modes = new[] { DragMode.TopLeft, DragMode.Top, DragMode.TopRight, DragMode.Right, DragMode.BottomRight, DragMode.Bottom, DragMode.BottomLeft, DragMode.Left };
-        for (var i = 0; i < handles.Length; i++) if ((handles[i] - point).Length <= hit) return modes[i];
-        if (r.Contains(point)) return DragMode.Move;
-        return DragMode.Create;
+        return CropInteractionGeometry.GetRegion(r, point) switch
+        {
+            CropPointerRegion.TopLeft => DragMode.TopLeft,
+            CropPointerRegion.Top => DragMode.Top,
+            CropPointerRegion.TopRight => DragMode.TopRight,
+            CropPointerRegion.Right => DragMode.Right,
+            CropPointerRegion.BottomRight => DragMode.BottomRight,
+            CropPointerRegion.Bottom => DragMode.Bottom,
+            CropPointerRegion.BottomLeft => DragMode.BottomLeft,
+            CropPointerRegion.Left => DragMode.Left,
+            CropPointerRegion.Move => DragMode.Move,
+            _ => DragMode.Create
+        };
     }
 
-    private static IEnumerable<Point> HandlePoints(Rect r) => new[] { new Point(r.Left, r.Top), new Point(r.Left + r.Width / 2, r.Top), new Point(r.Right, r.Top), new Point(r.Right, r.Top + r.Height / 2), new Point(r.Right, r.Bottom), new Point(r.Left + r.Width / 2, r.Bottom), new Point(r.Left, r.Bottom), new Point(r.Left, r.Top + r.Height / 2) };
     private static Cursor CursorFor(DragMode mode) => mode switch { DragMode.Left or DragMode.Right => Cursors.SizeWE, DragMode.Top or DragMode.Bottom => Cursors.SizeNS, DragMode.TopLeft or DragMode.BottomRight => Cursors.SizeNWSE, DragMode.TopRight or DragMode.BottomLeft => Cursors.SizeNESW, DragMode.Move => Cursors.SizeAll, _ => Cursors.Cross };
     private void SetCrop(CropRect crop) { _crop = crop; InvalidateVisual(); CropChanged?.Invoke(this, crop.Clone()); }
 }

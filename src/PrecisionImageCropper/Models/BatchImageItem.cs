@@ -24,6 +24,7 @@ public sealed class BatchImageItem : INotifyPropertyChanged
     private bool _isThumbnailLoading = true;
     private CropRect _cropRectangle;
     private string _selectedAspectRatio = "FreeForm";
+    private bool _isAspectLocked;
     private double _customAspectRatioWidth = 1;
     private double _customAspectRatioHeight = 1;
     private int _netRotation;
@@ -91,6 +92,12 @@ public sealed class BatchImageItem : INotifyPropertyChanged
     {
         get => _selectedAspectRatio;
         set => Set(ref _selectedAspectRatio, value ?? "FreeForm");
+    }
+
+    public bool IsAspectLocked
+    {
+        get => _isAspectLocked;
+        set => Set(ref _isAspectLocked, value);
     }
 
     public double CustomAspectRatioWidth
@@ -162,6 +169,10 @@ public sealed class BatchImageItem : INotifyPropertyChanged
     public string OutputDimensionsText => $"{OutputWidth:N0} × {OutputHeight:N0} px";
     public string EditStateText => IsEdited ? "Edited" : "Original";
     public string OutputFileName => GetSuggestedOutputFileName();
+    public bool CanUndo => _history.CanUndo;
+    public bool CanRedo => _history.CanRedo;
+
+    private readonly ImageEditHistory _history = new();
 
     public string GetSuggestedOutputFileName()
     {
@@ -172,6 +183,58 @@ public sealed class BatchImageItem : INotifyPropertyChanged
             NetRotation,
             HorizontalFlip,
             VerticalFlip);
+    }
+
+    public ImageEditState CaptureEditState() => new(
+        _cropRectangle, _selectedAspectRatio, _isAspectLocked,
+        _customAspectRatioWidth, _customAspectRatioHeight, _netRotation,
+        _horizontalFlip, _verticalFlip);
+
+    /// <summary>Call once after a completed logical edit, never on every drag delta.</summary>
+    public void CommitEdit(ImageEditState before)
+    {
+        _history.Commit(before, CaptureEditState());
+        OnPropertyChanged(nameof(CanUndo));
+        OnPropertyChanged(nameof(CanRedo));
+    }
+
+    public bool Undo()
+    {
+        var state = _history.Undo(CaptureEditState());
+        if (state is null) return false;
+        RestoreEditState(state);
+        OnPropertyChanged(nameof(CanUndo));
+        OnPropertyChanged(nameof(CanRedo));
+        return true;
+    }
+
+    public bool Redo()
+    {
+        var state = _history.Redo(CaptureEditState());
+        if (state is null) return false;
+        RestoreEditState(state);
+        OnPropertyChanged(nameof(CanUndo));
+        OnPropertyChanged(nameof(CanRedo));
+        return true;
+    }
+
+    public void ResetEdits()
+    {
+        var before = CaptureEditState();
+        RestoreEditState(new ImageEditState(new CropRect(0, 0, OriginalWidth, OriginalHeight), "FreeForm", false, 1, 1, 0, false, false));
+        CommitEdit(before);
+    }
+
+    private void RestoreEditState(ImageEditState state)
+    {
+        CropRectangle = state.Crop;
+        SelectedAspectRatio = state.AspectRatio;
+        IsAspectLocked = state.AspectLocked;
+        CustomAspectRatioWidth = state.CustomAspectRatioWidth;
+        CustomAspectRatioHeight = state.CustomAspectRatioHeight;
+        NetRotation = state.NetRotation;
+        HorizontalFlip = state.HorizontalFlip;
+        VerticalFlip = state.VerticalFlip;
     }
 
     private int CropWidth => Math.Max(1, (int)Math.Round(_cropRectangle.Width));

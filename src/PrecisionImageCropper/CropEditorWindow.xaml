@@ -3,102 +3,68 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:PrecisionImageCropper.Controls"
         Title="Crop Image" Width="1120" Height="760" MinWidth="900" MinHeight="620"
-        WindowStartupLocation="CenterOwner" Background="#F5F6F8">
+        WindowStartupLocation="CenterOwner" Background="#F4F6F8" FontFamily="Segoe UI">
     <Window.Resources>
-        <Style x:Key="ActionButton" TargetType="Button">
-            <Setter Property="Margin" Value="0,0,8,0"/>
-            <Setter Property="Padding" Value="14,7"/>
-            <Setter Property="MinHeight" Value="32"/>
-            <Setter Property="Background" Value="White"/>
-            <Setter Property="BorderBrush" Value="#D5DAE2"/>
-            <Setter Property="Foreground" Value="#263445"/>
-            <Setter Property="Cursor" Value="Hand"/>
+        <Style x:Key="CommandButton" TargetType="Button">
+            <Setter Property="Height" Value="32"/><Setter Property="MinHeight" Value="32"/><Setter Property="MaxHeight" Value="32"/><Setter Property="Padding" Value="10,0"/>
+            <Setter Property="Margin" Value="0,0,6,0"/><Setter Property="Foreground" Value="#25364A"/>
+            <Setter Property="Background" Value="Transparent"/><Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Cursor" Value="Hand"/><Setter Property="HorizontalContentAlignment" Value="Center"/><Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="border" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="border" Property="Background" Value="#E7EEF7"/></Trigger><Trigger Property="IsPressed" Value="True"><Setter TargetName="border" Property="Background" Value="#D6E3F3"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value=".42"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
         </Style>
-        <Style x:Key="PrimaryActionButton" TargetType="Button" BasedOn="{StaticResource ActionButton}">
-            <Setter Property="Background" Value="#1769D8"/>
-            <Setter Property="BorderBrush" Value="#1769D8"/>
-            <Setter Property="Foreground" Value="White"/>
-        </Style>
-        <Style x:Key="FieldLabel" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#53657A"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Margin" Value="0,0,0,4"/>
-        </Style>
-        <Style x:Key="FieldBox" TargetType="TextBox">
-            <Setter Property="Padding" Value="7,5"/>
-            <Setter Property="BorderBrush" Value="#CAD3DF"/>
-            <Setter Property="Background" Value="White"/>
-            <Setter Property="HorizontalContentAlignment" Value="Right"/>
-        </Style>
+        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource CommandButton}"><Setter Property="Height" Value="34"/><Setter Property="MinHeight" Value="34"/><Setter Property="MaxHeight" Value="34"/><Setter Property="Padding" Value="12,0"/><Setter Property="Background" Value="#1769D8"/><Setter Property="Foreground" Value="White"/><Setter Property="BorderBrush" Value="#1769D8"/></Style>
+        <Style x:Key="CompactButton" TargetType="Button" BasedOn="{StaticResource CommandButton}"><Setter Property="Height" Value="30"/><Setter Property="MinHeight" Value="30"/><Setter Property="MaxHeight" Value="30"/><Setter Property="Padding" Value="8,0"/></Style>
+        <Style x:Key="ZoomButton" TargetType="Button" BasedOn="{StaticResource CompactButton}"><Setter Property="Width" Value="30"/><Setter Property="Padding" Value="0"/></Style>
+        <Style x:Key="FieldLabel" TargetType="TextBlock"><Setter Property="Foreground" Value="#5E6D7F"/><Setter Property="FontSize" Value="11"/><Setter Property="Margin" Value="0,0,0,4"/></Style>
+        <Style x:Key="FieldBox" TargetType="TextBox"><Setter Property="Height" Value="30"/><Setter Property="Padding" Value="7,0"/><Setter Property="BorderBrush" Value="#C9D3DF"/><Setter Property="Background" Value="White"/><Setter Property="HorizontalContentAlignment" Value="Right"/><Setter Property="VerticalContentAlignment" Value="Center"/></Style>
+        <Style TargetType="ToolTip"><Setter Property="Padding" Value="8,5"/><Setter Property="Background" Value="#263445"/><Setter Property="Foreground" Value="White"/></Style>
     </Window.Resources>
     <DockPanel>
-        <Border DockPanel.Dock="Top" Background="White" BorderBrush="#D9DEE6" BorderThickness="0,0,0,1" Padding="20,14">
+        <Border DockPanel.Dock="Top" Background="White" BorderBrush="#D9E0E8" BorderThickness="0,0,0,1" Padding="16,10">
             <DockPanel>
-                <StackPanel>
-                    <TextBlock x:Name="ImageNameText" FontSize="18" FontWeight="SemiBold" Foreground="#263445" TextTrimming="CharacterEllipsis"/>
-                    <TextBlock x:Name="ImageInfoText" Margin="0,3,0,0" Foreground="#66758A" FontSize="12"/>
+                <StackPanel><TextBlock x:Name="ImageNameText" FontSize="15" FontWeight="SemiBold" Foreground="#24364A" TextTrimming="CharacterEllipsis"/><TextBlock x:Name="ImageInfoText" Margin="0,2,0,0" Foreground="#6B7889" FontSize="11"/></StackPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="UndoButton" Style="{StaticResource CommandButton}" Click="Undo_Click" ToolTip="Undo&#x0a;Ctrl+Z">↶</Button>
+                    <Button x:Name="RedoButton" Style="{StaticResource CommandButton}" Click="Redo_Click" ToolTip="Redo&#x0a;Ctrl+Y">↷</Button>
+                    <TextBlock x:Name="PositionText" Margin="10,0,0,0" VerticalAlignment="Center" Foreground="#6B7889"/>
                 </StackPanel>
-                <TextBlock x:Name="PositionText" DockPanel.Dock="Right" VerticalAlignment="Center" Foreground="#66758A"/>
             </DockPanel>
         </Border>
-        <Border DockPanel.Dock="Bottom" Background="White" BorderBrush="#D9DEE6" BorderThickness="0,1,0,0" Padding="20,13">
+        <Border DockPanel.Dock="Bottom" Background="White" BorderBrush="#D9E0E8" BorderThickness="0,1,0,0" Padding="16,9">
             <DockPanel LastChildFill="False">
-                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
-                    <Button x:Name="PreviousButton" Style="{StaticResource ActionButton}" Click="Previous_Click">Previous</Button>
-                    <Button x:Name="NextButton" Style="{StaticResource ActionButton}" Click="Next_Click">Next</Button>
-                </StackPanel>
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                    <Button Style="{StaticResource ActionButton}" Click="Cancel_Click">Cancel</Button>
-                    <Button Style="{StaticResource ActionButton}" Click="Apply_Click">Apply</Button>
-                    <Button x:Name="ApplyNextButton" Style="{StaticResource PrimaryActionButton}" Click="ApplyNext_Click">Apply &amp; Next</Button>
-                </StackPanel>
+                <TextBlock x:Name="StatusText" DockPanel.Dock="Left" VerticalAlignment="Center" Foreground="#66758A" FontSize="11"/>
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Margin="16,0,0,0"><Button x:Name="PreviousButton" Style="{StaticResource CompactButton}" Click="Previous_Click">Previous</Button><Button x:Name="NextButton" Style="{StaticResource CompactButton}" Click="Next_Click">Next</Button></StackPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"><Button Style="{StaticResource CommandButton}" Click="Cancel_Click">Cancel</Button><Button Style="{StaticResource CommandButton}" Click="Apply_Click">Apply</Button><Button x:Name="ApplyNextButton" Style="{StaticResource PrimaryButton}" Click="ApplyNext_Click">Apply &amp; Next</Button></StackPanel>
             </DockPanel>
         </Border>
-        <Grid Margin="20">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="310"/>
-            </Grid.ColumnDefinitions>
-            <Border Grid.Column="0" Background="#E9EDF2" BorderBrush="#D6DEE8" BorderThickness="1" CornerRadius="6">
+        <Grid Margin="16">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="280"/></Grid.ColumnDefinitions>
+            <Border Grid.Column="0" Background="#1E2835" BorderBrush="#D6DEE8" BorderThickness="1" CornerRadius="4">
                 <Grid>
                     <ScrollViewer x:Name="PreviewViewport" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" SizeChanged="PreviewViewport_SizeChanged">
-                        <Grid x:Name="PreviewCanvas" HorizontalAlignment="Left" VerticalAlignment="Top">
-                            <Image x:Name="PreviewImage" Stretch="Fill" SnapsToDevicePixels="True"/>
-                            <controls:CropAdorner x:Name="CropOverlay" CropChanged="CropOverlay_CropChanged"/>
-                        </Grid>
+                        <Grid x:Name="PreviewHost"><Grid x:Name="PreviewCanvas" HorizontalAlignment="Center" VerticalAlignment="Center"><Image x:Name="PreviewImage" Stretch="Fill" SnapsToDevicePixels="True"/><controls:CropAdorner x:Name="CropOverlay" CropChanged="CropOverlay_CropChanged"/></Grid></Grid>
                     </ScrollViewer>
-                    <TextBlock x:Name="PreviewLoadingText" Text="Loading preview..." HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#66758A"/>
+                    <TextBlock x:Name="PreviewLoadingText" Text="Loading preview…" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#D9E3EE"/>
                 </Grid>
             </Border>
-            <Border Grid.Column="1" Margin="18,0,0,0" Padding="16" Background="White" BorderBrush="#D6DEE8" BorderThickness="1" CornerRadius="6">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                    <StackPanel>
-                        <TextBlock Text="Crop Rectangle" FontSize="16" FontWeight="SemiBold" Foreground="#263445" Margin="0,0,0,14"/>
-                        <Grid Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-                            <StackPanel Margin="0,0,6,0"><TextBlock Style="{StaticResource FieldLabel}" Text="Width"/><TextBox x:Name="WidthBox" Style="{StaticResource FieldBox}" Tag="Width" LostFocus="NumericField_LostFocus" KeyDown="NumericField_KeyDown"/></StackPanel>
-                            <StackPanel Grid.Column="1"><TextBlock Style="{StaticResource FieldLabel}" Text="Height"/><TextBox x:Name="HeightBox" Style="{StaticResource FieldBox}" Tag="Height" LostFocus="NumericField_LostFocus" KeyDown="NumericField_KeyDown"/></StackPanel>
-                        </Grid>
-                        <TextBlock Style="{StaticResource FieldLabel}" Text="Aspect Ratio"/>
-                        <ComboBox x:Name="AspectRatioBox" Margin="0,0,0,8" Padding="6,4" SelectionChanged="AspectRatioBox_SelectionChanged">
-                            <ComboBoxItem Content="FreeForm"/><ComboBoxItem Content="Original"/><ComboBoxItem Content="1:1"/><ComboBoxItem Content="4:3"/><ComboBoxItem Content="3:2"/><ComboBoxItem Content="16:9"/><ComboBoxItem Content="9:16"/><ComboBoxItem Content="5:4"/><ComboBoxItem Content="4:5"/><ComboBoxItem Content="A4 Portrait"/><ComboBoxItem Content="A4 Landscape"/><ComboBoxItem Content="Custom"/>
-                        </ComboBox>
-                        <Grid x:Name="CustomRatioPanel" Margin="0,0,0,12" Visibility="Collapsed"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-                            <StackPanel Margin="0,0,6,0"><TextBlock Style="{StaticResource FieldLabel}" Text="Custom width"/><TextBox x:Name="CustomWidthBox" Style="{StaticResource FieldBox}" Text="1" LostFocus="CustomRatio_LostFocus" KeyDown="NumericField_KeyDown"/></StackPanel>
-                            <StackPanel Grid.Column="1"><TextBlock Style="{StaticResource FieldLabel}" Text="Custom height"/><TextBox x:Name="CustomHeightBox" Style="{StaticResource FieldBox}" Text="1" LostFocus="CustomRatio_LostFocus" KeyDown="NumericField_KeyDown"/></StackPanel>
-                        </Grid>
-                        <Grid Margin="0,0,0,14"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-                            <StackPanel Margin="0,0,6,0"><TextBlock Style="{StaticResource FieldLabel}" Text="X"/><TextBox x:Name="XBox" Style="{StaticResource FieldBox}" Tag="X" LostFocus="NumericField_LostFocus" KeyDown="NumericField_KeyDown"/></StackPanel>
-                            <StackPanel Grid.Column="1"><TextBlock Style="{StaticResource FieldLabel}" Text="Y"/><TextBox x:Name="YBox" Style="{StaticResource FieldBox}" Tag="Y" LostFocus="NumericField_LostFocus" KeyDown="NumericField_KeyDown"/></StackPanel>
-                        </Grid>
-                        <Separator Margin="0,0,0,14"/>
-                        <TextBlock Style="{StaticResource FieldLabel}" Text="Zoom"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                            <Slider x:Name="ZoomSlider" Minimum="0.5" Maximum="2" Value="1" Width="180" ValueChanged="ZoomSlider_ValueChanged"/>
-                            <TextBlock x:Name="ZoomText" Margin="9,0,0,0" VerticalAlignment="Center" Foreground="#53657A"/>
-                        </StackPanel>
-                        <Button HorizontalAlignment="Left" Style="{StaticResource ActionButton}" Click="Reset_Click">Reset</Button>
-                    </StackPanel>
-                </ScrollViewer>
+            <Border Grid.Column="1" Margin="16,0,0,0" Padding="14" Background="White" BorderBrush="#D6DEE8" BorderThickness="1" CornerRadius="4">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel>
+                    <TextBlock Text="Crop" FontSize="14" FontWeight="SemiBold" Foreground="#263445" Margin="0,0,0,12"/>
+                    <Grid Margin="0,0,0,8"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition Width="34"/></Grid.ColumnDefinitions>
+                        <StackPanel Margin="0,0,5,0"><TextBlock Style="{StaticResource FieldLabel}" Text="W (px)"/><TextBox x:Name="WidthBox" Style="{StaticResource FieldBox}" Tag="Width" LostFocus="NumericField_LostFocus" KeyDown="NumericField_KeyDown"/></StackPanel>
+                        <StackPanel Grid.Column="1" Margin="0,0,5,0"><TextBlock Style="{StaticResource FieldLabel}" Text="H (px)"/><TextBox x:Name="HeightBox" Style="{StaticResource FieldBox}" Tag="Height" LostFocus="NumericField_LostFocus" KeyDown="NumericField_KeyDown"/></StackPanel>
+                        <Button x:Name="LockButton" Grid.Column="2" Style="{StaticResource ZoomButton}" Margin="0,19,0,0" Click="Lock_Click" ToolTip="Lock aspect ratio">↔</Button>
+                    </Grid>
+                    <TextBlock Style="{StaticResource FieldLabel}" Text="Ratio"/><ComboBox x:Name="AspectRatioBox" Height="30" Margin="0,0,0,10" Padding="6,0" VerticalContentAlignment="Center" SelectionChanged="AspectRatioBox_SelectionChanged"><ComboBoxItem Content="FreeForm"/><ComboBoxItem Content="1:1"/><ComboBoxItem Content="3:2"/><ComboBoxItem Content="4:3"/><ComboBoxItem Content="5:4"/><ComboBoxItem Content="16:9"/><ComboBoxItem Content="Original"/><ComboBoxItem Content="Custom"/></ComboBox>
+                    <Grid x:Name="CustomRatioPanel" Margin="0,0,0,10" Visibility="Collapsed"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions><StackPanel Margin="0,0,5,0"><TextBlock Style="{StaticResource FieldLabel}" Text="Custom W"/><TextBox x:Name="CustomWidthBox" Style="{StaticResource FieldBox}" Text="1" LostFocus="CustomRatio_LostFocus" KeyDown="NumericField_KeyDown"/></StackPanel><StackPanel Grid.Column="1"><TextBlock Style="{StaticResource FieldLabel}" Text="Custom H"/><TextBox x:Name="CustomHeightBox" Style="{StaticResource FieldBox}" Text="1" LostFocus="CustomRatio_LostFocus" KeyDown="NumericField_KeyDown"/></StackPanel></Grid>
+                    <TextBlock Style="{StaticResource FieldLabel}" Text="Recent sizes"/><ComboBox x:Name="RecentSizesBox" Height="30" Margin="0,0,0,12" Padding="6,0" VerticalContentAlignment="Center" SelectionChanged="RecentSizesBox_SelectionChanged"/>
+                    <Separator Margin="0,0,0,12"/>
+                    <TextBlock Text="Position" FontSize="12" FontWeight="SemiBold" Foreground="#263445" Margin="0,0,0,7"/>
+                    <Grid Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions><StackPanel Margin="0,0,5,0"><TextBlock Style="{StaticResource FieldLabel}" Text="X (px)"/><TextBox x:Name="XBox" Style="{StaticResource FieldBox}" Tag="X" LostFocus="NumericField_LostFocus" KeyDown="NumericField_KeyDown"/></StackPanel><StackPanel Grid.Column="1"><TextBlock Style="{StaticResource FieldLabel}" Text="Y (px)"/><TextBox x:Name="YBox" Style="{StaticResource FieldBox}" Tag="Y" LostFocus="NumericField_LostFocus" KeyDown="NumericField_KeyDown"/></StackPanel></Grid>
+                    <TextBlock Style="{StaticResource FieldLabel}" Text="Zoom"/><StackPanel Orientation="Horizontal" Margin="0,0,0,12"><Button Style="{StaticResource ZoomButton}" Click="ZoomOut_Click" ToolTip="Zoom out">−</Button><TextBlock x:Name="ZoomText" Width="44" VerticalAlignment="Center" TextAlignment="Center" Foreground="#53657A"/><Button Style="{StaticResource ZoomButton}" Click="ZoomIn_Click" ToolTip="Zoom in">+</Button></StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12"><Button Style="{StaticResource CompactButton}" Click="Fit_Click" ToolTip="Fit to window&#x0a;F">Fit</Button><Button Style="{StaticResource CompactButton}" Click="ActualSize_Click" ToolTip="Actual size&#x0a;1">1:1</Button></StackPanel>
+                    <Button HorizontalAlignment="Left" Style="{StaticResource CompactButton}" Click="Reset_Click" ToolTip="Reset crop for this image">Reset crop</Button>
+                </StackPanel></ScrollViewer>
             </Border>
         </Grid>
     </DockPanel>

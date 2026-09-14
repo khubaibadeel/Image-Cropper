@@ -55,6 +55,49 @@ public static class CropMath
         return Clamp(crop, imageWidth, imageHeight);
     }
 
+    /// <summary>
+    /// Applies a user-entered dimension in source pixels. When a ratio is
+    /// locked, the changed axis drives the other axis; otherwise each axis is
+    /// independent. The crop is always clamped without changing coordinate
+    /// systems or depending on UI zoom.
+    /// </summary>
+    public static CropRect SetDimension(
+        CropRect crop,
+        bool changingWidth,
+        double value,
+        double imageWidth,
+        double imageHeight,
+        double? lockedRatio = null)
+    {
+        if (imageWidth <= 0 || imageHeight <= 0) return Clamp(crop, imageWidth, imageHeight);
+        var result = crop.Clone();
+        if (lockedRatio is > 0)
+        {
+            if (changingWidth)
+            {
+                var maxWidth = Math.Min(imageWidth, imageHeight * lockedRatio.Value);
+                result.Width = Math.Clamp(value, Math.Min(MinSize, maxWidth), maxWidth);
+                result.Height = result.Width / lockedRatio.Value;
+            }
+            else
+            {
+                var maxHeight = Math.Min(imageHeight, imageWidth / lockedRatio.Value);
+                result.Height = Math.Clamp(value, Math.Min(MinSize, maxHeight), maxHeight);
+                result.Width = result.Height * lockedRatio.Value;
+            }
+        }
+        else if (changingWidth)
+        {
+            result.Width = value;
+        }
+        else
+        {
+            result.Height = value;
+        }
+
+        return Clamp(result, imageWidth, imageHeight);
+    }
+
     public static Int32Rect ToPixelRect(CropRect crop, int imageWidth, int imageHeight)
     {
         // Round once, at export time. This keeps an entered 1200 × 800 crop exactly

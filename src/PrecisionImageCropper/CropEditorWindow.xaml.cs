@@ -20,9 +20,13 @@ public partial class CropEditorWindow : Window
     private CropRect _openedCrop = new();
     private string _draftAspectRatio = "FreeForm";
     private string _openedAspectRatio = "FreeForm";
+    private bool _openedAspectLocked;
     private double _customWidth = 1;
     private double _customHeight = 1;
+    private bool _aspectLocked;
+    private double _zoom = 1;
     private bool _synchronizing;
+    private readonly SettingsService _settings = new();
 
     public CropEditorWindow(
         Window owner,
@@ -48,9 +52,11 @@ public partial class CropEditorWindow : Window
         _openedCrop = item.CropRectangle;
         _draftCrop = _openedCrop.Clone();
         _openedAspectRatio = item.SelectedAspectRatio;
+        _openedAspectLocked = item.IsAspectLocked;
         _draftAspectRatio = _openedAspectRatio;
         _customWidth = item.CustomAspectRatioWidth;
         _customHeight = item.CustomAspectRatioHeight;
+        _aspectLocked = item.IsAspectLocked;
         CustomWidthBox.Text = _customWidth.ToString("0.##", CultureInfo.CurrentCulture);
         CustomHeightBox.Text = _customHeight.ToString("0.##", CultureInfo.CurrentCulture);
         ImageNameText.Text = item.OriginalFileName;
@@ -60,6 +66,7 @@ public partial class CropEditorWindow : Window
         PreviewImage.Source = null;
         UpdateNavigationButtons();
         SelectAspectRatio(_draftAspectRatio);
+        RefreshRecentSizes();
         UpdateOverlayAndFields();
 
         try
@@ -82,22 +89,25 @@ public partial class CropEditorWindow : Window
 
     private void UpdatePreviewLayout()
     {
-        if (PreviewViewport.ActualWidth <= 0 || PreviewViewport.ActualHeight <= 0) return;
-        var availableWidth = Math.Max(1, PreviewViewport.ActualWidth - 28);
-        var availableHeight = Math.Max(1, PreviewViewport.ActualHeight - 28);
-        var fitScale = Math.Min(availableWidth / _item.OriginalWidth, availableHeight / _item.OriginalHeight);
-        var scale = Math.Max(0.001, fitScale * ZoomSlider.Value);
-        var width = _item.OriginalWidth * scale;
-        var height = _item.OriginalHeight * scale;
-        PreviewCanvas.Width = width;
-        PreviewCanvas.Height = height;
-        PreviewImage.Width = width;
-        PreviewImage.Height = height;
-        CropOverlay.Width = width;
-        CropOverlay.Height = height;
+        var viewportWidth = PreviewViewport.ViewportWidth > 0 ? PreviewViewport.ViewportWidth : PreviewViewport.ActualWidth;
+        var viewportHeight = PreviewViewport.ViewportHeight > 0 ? PreviewViewport.ViewportHeight : PreviewViewport.ActualHeight;
+        if (viewportWidth <= 0 || viewportHeight <= 0) return;
+
+        var layout = CropViewportGeometry.Calculate(
+            viewportWidth, viewportHeight, _item.OriginalWidth, _item.OriginalHeight, _zoom);
+        // PreviewHost maintains a viewport-sized surface when the image is smaller.
+        // PreviewCanvas is centered inside it; its own origin stays at source (0,0).
+        PreviewHost.Width = layout.HostWidth;
+        PreviewHost.Height = layout.HostHeight;
+        PreviewCanvas.Width = layout.ImageWidth;
+        PreviewCanvas.Height = layout.ImageHeight;
+        PreviewImage.Width = layout.ImageWidth;
+        PreviewImage.Height = layout.ImageHeight;
+        CropOverlay.Width = layout.ImageWidth;
+        CropOverlay.Height = layout.ImageHeight;
         CropOverlay.SourceWidth = _item.OriginalWidth;
         CropOverlay.SourceHeight = _item.OriginalHeight;
-        CropOverlay.Scale = scale;
+        CropOverlay.Scale = layout.Scale;
         CropOverlay.Crop = _draftCrop;
     }
 
@@ -105,12 +115,17 @@ public partial class CropEditorWindow : Window
     {
         _synchronizing = true;
         CropOverlay.Crop = _draftCrop;
-        CropOverlay.AspectRatio = GetAspectRatio(_draftAspectRatio);
-        WidthBox.Text = _draftCrop.Width.ToString("0.##", CultureInfo.CurrentCulture);
-        HeightBox.Text = _draftCrop.Height.ToString("0.##", CultureInfo.CurrentCulture);
-        XBox.Text = _draftCrop.X.ToString("0.##", CultureInfo.CurrentCulture);
-        YBox.Text = _draftCrop.Y.ToString("0.##", CultureInfo.CurrentCulture);
-        ZoomText.Text = $"{ZoomSlider.Value * 100:0}%";
+        CropOverlay.AspectRatio = _aspectLocked ? GetAspectRatio(_draftAspectRatio) : null;
+        WidthBox.Text = FormatPixel(_draftCrop.Width);
+        HeightBox.Text = FormatPixel(_draftCrop.Height);
+        XBox.Text = FormatPixel(_draftCrop.X);
+        YBox.Text = FormatPixel(_draftCrop.Y);
+        ZoomText.Text = $"{_zoom * 100:0}%";
+        LockButton.Content = "↔";
+        LockButton.Foreground = _aspectLocked ? System.Windows.Media.Brushes.DodgerBlue : System.Windows.Media.Brushes.SlateGray;
+        StatusText.Text = $"{_item.OriginalDimensionsText}  |  Crop {FormatPixel(_draftCrop.Width)} × {FormatPixel(_draftCrop.Height)} px  |  Zoom {_zoom * 100:0}%";
+        UndoButton.IsEnabled = _item.CanUndo;
+        RedoButton.IsEnabled = _item.CanRedo;
         _synchronizing = false;
     }
 
@@ -126,6 +141,7 @@ public partial class CropEditorWindow : Window
         if (_synchronizing || AspectRatioBox.SelectedItem is not ComboBoxItem option) return;
         _draftAspectRatio = option.Content?.ToString() ?? "FreeForm";
         CustomRatioPanel.Visibility = _draftAspectRatio == "Custom" ? Visibility.Visible : Visibility.Collapsed;
+        _aspectLocked = _draftAspectRatio != "FreeForm";
         var ratio = GetAspectRatio(_draftAspectRatio);
         if (ratio is > 0)
             _draftCrop = CropMath.ApplyRatio(_draftCrop, ratio.Value, _item.OriginalWidth, _item.OriginalHeight);
@@ -171,33 +187,16 @@ public partial class CropEditorWindow : Window
             return;
         }
 
+        value = CropViewportGeometry.NormalizePixel(value);
         var crop = _draftCrop.Clone();
-        var ratio = GetAspectRatio(_draftAspectRatio);
+        var ratio = _aspectLocked ? GetAspectRatio(_draftAspectRatio) : null;
         switch (property)
         {
             case "Width":
-                if (ratio is > 0)
-                {
-                    var maxW = Math.Min(_item.OriginalWidth, _item.OriginalHeight * ratio.Value);
-                    crop.Width = Math.Clamp(value, CropMath.MinSize, maxW);
-                    crop.Height = crop.Width / ratio.Value;
-                }
-                else
-                {
-                    crop.Width = value;
-                }
+                crop = CropMath.SetDimension(crop, true, value, _item.OriginalWidth, _item.OriginalHeight, ratio);
                 break;
             case "Height":
-                if (ratio is > 0)
-                {
-                    var maxH = Math.Min(_item.OriginalHeight, _item.OriginalWidth / ratio.Value);
-                    crop.Height = Math.Clamp(value, CropMath.MinSize, maxH);
-                    crop.Width = crop.Height * ratio.Value;
-                }
-                else
-                {
-                    crop.Height = value;
-                }
+                crop = CropMath.SetDimension(crop, false, value, _item.OriginalWidth, _item.OriginalHeight, ratio);
                 break;
             case "X": crop.X = value; break;
             case "Y": crop.Y = value; break;
@@ -217,19 +216,13 @@ public partial class CropEditorWindow : Window
         UpdateOverlayAndFields();
     }
 
-    private void ZoomSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-    {
-        if (!IsLoaded) return;
-        UpdatePreviewLayout();
-        UpdateOverlayAndFields();
-    }
-
     private void PreviewViewport_SizeChanged(object sender, SizeChangedEventArgs e) => UpdatePreviewLayout();
 
     private void Reset_Click(object sender, RoutedEventArgs e)
     {
         _draftCrop = new CropRect(0, 0, _item.OriginalWidth, _item.OriginalHeight);
         _draftAspectRatio = "FreeForm";
+        _aspectLocked = false;
         SelectAspectRatio(_draftAspectRatio);
         UpdateOverlayAndFields();
     }
@@ -273,13 +266,21 @@ public partial class CropEditorWindow : Window
         try
         {
             _draftCrop = CropMath.Clamp(_draftCrop, _item.OriginalWidth, _item.OriginalHeight);
+            var before = _item.CaptureEditState();
+            // Capture before assignment so a completed drag/resize or typed
+            // change becomes one history record when Apply is chosen.
             _item.CropRectangle = _draftCrop;
             _item.SelectedAspectRatio = _draftAspectRatio;
+            _item.IsAspectLocked = _aspectLocked;
             _item.CustomAspectRatioWidth = _customWidth;
             _item.CustomAspectRatioHeight = _customHeight;
+            _item.CommitEdit(before);
+            _settings.RecordCropSize(_draftCrop.Width, _draftCrop.Height);
+            RefreshRecentSizes();
             await _refreshThumbnailAsync(_item);
             _openedCrop = _draftCrop.Clone();
             _openedAspectRatio = _draftAspectRatio;
+            _openedAspectLocked = _aspectLocked;
             return true;
         }
         catch (Exception ex)
@@ -298,6 +299,30 @@ public partial class CropEditorWindow : Window
             DialogResult = false;
             e.Handled = true;
         }
+        else if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.Z)
+        {
+            Undo_Click(this, e); e.Handled = true;
+        }
+        else if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.Y)
+        {
+            Redo_Click(this, e); e.Handled = true;
+        }
+        else if (!IsEditableTextBoxFocused() && (e.Key is Key.Left or Key.Right or Key.Up or Key.Down))
+        {
+            var amount = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? 10 : 1;
+            var dx = e.Key == Key.Left ? -amount : e.Key == Key.Right ? amount : 0;
+            var dy = e.Key == Key.Up ? -amount : e.Key == Key.Down ? amount : 0;
+            _draftCrop = CropMath.Move(_draftCrop, dx, dy, _item.OriginalWidth, _item.OriginalHeight);
+            UpdateOverlayAndFields(); e.Handled = true;
+        }
+        else if (!IsEditableTextBoxFocused() && e.Key == Key.F)
+        {
+            Fit_Click(this, e); e.Handled = true;
+        }
+        else if (!IsEditableTextBoxFocused() && e.Key == Key.D1)
+        {
+            ActualSize_Click(this, e); e.Handled = true;
+        }
     }
 
     private void UpdateNavigationButtons()
@@ -313,7 +338,8 @@ public partial class CropEditorWindow : Window
         Math.Abs(_draftCrop.Y - _openedCrop.Y) > .01 ||
         Math.Abs(_draftCrop.Width - _openedCrop.Width) > .01 ||
         Math.Abs(_draftCrop.Height - _openedCrop.Height) > .01 ||
-        !string.Equals(_draftAspectRatio, _openedAspectRatio, StringComparison.Ordinal);
+        !string.Equals(_draftAspectRatio, _openedAspectRatio, StringComparison.Ordinal) ||
+        _aspectLocked != _openedAspectLocked;
 
     private double? GetAspectRatio(string value) => value switch
     {
@@ -336,4 +362,64 @@ public partial class CropEditorWindow : Window
 
     private static bool TryReadPositiveOrZero(TextBox field, out double value) =>
         double.TryParse(field.Text, NumberStyles.Float, CultureInfo.CurrentCulture, out value) && value >= 0;
+
+    private void Lock_Click(object sender, RoutedEventArgs e)
+    {
+        _aspectLocked = !_aspectLocked;
+        var ratio = GetAspectRatio(_draftAspectRatio);
+        if (_aspectLocked && ratio is > 0)
+            _draftCrop = CropMath.ApplyRatio(_draftCrop, ratio.Value, _item.OriginalWidth, _item.OriginalHeight);
+        UpdateOverlayAndFields();
+    }
+
+    private void RecentSizesBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_synchronizing || RecentSizesBox.SelectedItem is not RecentCropSize size) return;
+        _draftCrop = CropMath.SetDimension(_draftCrop, true, size.Width, _item.OriginalWidth, _item.OriginalHeight, null);
+        _draftCrop = CropMath.SetDimension(_draftCrop, false, size.Height, _item.OriginalWidth, _item.OriginalHeight, null);
+        UpdateOverlayAndFields();
+        RecentSizesBox.SelectedIndex = -1;
+    }
+
+    private void RefreshRecentSizes()
+    {
+        _synchronizing = true;
+        RecentSizesBox.Items.Clear();
+        RecentSizesBox.Items.Add(new ComboBoxItem { Content = "Choose a recent size…", IsEnabled = false });
+        foreach (var size in _settings.RecentCropSizes) RecentSizesBox.Items.Add(size);
+        RecentSizesBox.SelectedIndex = 0;
+        _synchronizing = false;
+    }
+
+    private void ZoomOut_Click(object sender, RoutedEventArgs e) { _zoom = Math.Max(.1, _zoom - .1); UpdatePreviewLayout(); UpdateOverlayAndFields(); }
+    private void ZoomIn_Click(object sender, RoutedEventArgs e) { _zoom = Math.Min(4, _zoom + .1); UpdatePreviewLayout(); UpdateOverlayAndFields(); }
+    private void Fit_Click(object sender, RoutedEventArgs e) { _zoom = 1; UpdatePreviewLayout(); UpdateOverlayAndFields(); }
+    private void ActualSize_Click(object sender, RoutedEventArgs e)
+    {
+        var viewportWidth = PreviewViewport.ViewportWidth > 0 ? PreviewViewport.ViewportWidth : PreviewViewport.ActualWidth;
+        var viewportHeight = PreviewViewport.ViewportHeight > 0 ? PreviewViewport.ViewportHeight : PreviewViewport.ActualHeight;
+        if (viewportWidth <= 0 || viewportHeight <= 0) return;
+        var fit = CropViewportGeometry.Calculate(viewportWidth, viewportHeight, _item.OriginalWidth, _item.OriginalHeight, 1).Scale;
+        _zoom = Math.Clamp(1 / fit, .1, 4);
+        UpdatePreviewLayout(); UpdateOverlayAndFields();
+    }
+
+    private async void Undo_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_item.Undo()) return;
+        await LoadItemAsync(_item);
+        await _refreshThumbnailAsync(_item);
+    }
+
+    private async void Redo_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_item.Redo()) return;
+        await LoadItemAsync(_item);
+        await _refreshThumbnailAsync(_item);
+    }
+
+    private static bool IsEditableTextBoxFocused() => Keyboard.FocusedElement is TextBox textBox && !textBox.IsReadOnly;
+
+    private static string FormatPixel(double value) =>
+        CropViewportGeometry.NormalizePixel(value).ToString(CultureInfo.CurrentCulture);
 }

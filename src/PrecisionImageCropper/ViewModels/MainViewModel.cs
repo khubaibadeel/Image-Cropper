@@ -23,6 +23,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public ObservableCollection<BatchImageItem> BatchItems { get; } = [];
     public BatchImageItem? SelectedBatchItem { get => _selectedBatchItem; set => Set(ref _selectedBatchItem, value); }
     public bool QueueIsEmpty => BatchItems.Count == 0;
+    public int ImageCount => BatchItems.Count;
     public string QueueSummary => BatchItems.Count == 1 ? "1 image" : $"{BatchItems.Count} images";
     public BitmapSource? Image { get => _image; set => Set(ref _image, value); }
     public int ImageWidth { get; private set; }
@@ -43,6 +44,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         OnPropertyChanged(nameof(QueueIsEmpty));
         OnPropertyChanged(nameof(QueueSummary));
+        OnPropertyChanged(nameof(ImageCount));
         if (SelectedBatchItem is not null && !BatchItems.Contains(SelectedBatchItem))
         {
             SelectedBatchItem = BatchItems.FirstOrDefault();
