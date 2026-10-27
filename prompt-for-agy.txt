@@ -1,0 +1,32 @@
+I'm working on my Windows 10 desktop app "Image Cropper" (PrecisionImageCropper). The project folder is ~660 MB (1,139 files, 113 folders), which seems far too large. The app's functionality and UI/UX are final and must NOT change in any way.
+
+PHASE 1: READ-ONLY AUDIT. This phase is investigation only.
+
+HARD RULES FOR THIS PHASE
+- Do NOT delete, move, rename or edit any file or folder.
+- Do NOT run build, restore, publish, clean, install, git gc, git clean, git reset, git checkout, or any command that creates, changes or removes files (including inside bin/obj/.git).
+- Do NOT create files inside the project folder. Print everything in this chat.
+- Use read-only commands only (Get-ChildItem, Measure-Object, Get-FileHash, git status, git count-objects, git ls-files, git log, git rev-list, etc.).
+- If you are not sure about something, write "unknown" instead of guessing. Back every claim with a path and a size in MB.
+
+REPORT ON THE FOLLOWING
+
+1. Overview: total size in MB; size (MB and % of total) of every top-level item; size of every second-level folder inside src, dist and tests.
+2. Biggest offenders: top 30 largest folders and top 30 largest files (path, size in MB, last modified).
+3. File types: total size and file count per extension (top 15 extensions).
+4. Tech stack and how the app runs: language/framework/target version (read the .sln, project files and README.md); the entry point; which exe or folder is the real app I would run; publish settings (self-contained, single-file, trimmed, ReadyToRun, RuntimeIdentifier); all package/library dependencies; any bundled runtime, native DLLs or models.
+5. The dist folder: what is inside; how many distinct builds, versions or copies; size of each; which is the latest; whether it bundles the runtime; any zips, installers or duplicated files; and whether anything in src, tests, the .sln or README references paths inside dist.
+6. Build artifacts and junk: find every bin, obj, .vs, publish, TestResults, packages, node_modules, __pycache__ folder and any *.pdb, *.log, *.tmp, *.bak files, with sizes. For each, say whether git tracks it or ignores it.
+7. Git: size of .git; output of `git count-objects -vH`; short `git status`; number of commits and branches; top 20 largest tracked files; top 20 largest blobs in history (path + size); the contents of .gitignore and whether it covers bin/obj/dist/.vs.
+8. Assets: images, icons, fonts and media in src and tests, with sizes. Say which are actually referenced by code or project files and which look unused.
+9. Tests: what is in tests, any large fixtures or sample images, and whether the app needs any of it to build or run.
+10. Duplicates: groups of files larger than 1 MB with identical hashes (list all paths).
+11. Classification: for every item larger than 5 MB, classify it as
+    A) Regenerable build output or cache (safe to delete, rebuilt from source)
+    B) Needed to run or build the app (keep)
+    C) Source, assets or git history (keep unless I approve)
+    D) Unclear, needs my decision
+    and give a confidence level (high/medium/low) with the reason.
+12. Estimate: MB that would be freed by removing all class A items, and separately class D items. Show the arithmetic.
+
+Finish with the 5 biggest findings and any questions you need me to answer before a cleanup. Do not propose or perform any deletion yet.
