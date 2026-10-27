@@ -3,6 +3,7 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <ApplicationIcon>..\..\PrecisionImageCropper.ico</ApplicationIcon>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
@@ -14,4 +15,7 @@
     <PublishSingleFile>true</PublishSingleFile>
     <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="PrecisionImageCropper.Tests" />
+  </ItemGroup>
 </Project>

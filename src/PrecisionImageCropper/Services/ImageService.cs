@@ -1,6 +1,9 @@
 using System.IO;
+using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using PrecisionImageCropper.Models;
+using PrecisionImageCropper.Utilities;
 
 namespace PrecisionImageCropper.Services;
 
@@ -21,16 +24,122 @@ public static class ImageService
 
         // OnLoad releases the source file immediately. Orientation is materialized before both
         // preview and final crop use the same, correctly oriented pixel coordinate system.
-        var orientation = ReadExifOrientation(path);
+        using var stream = File.OpenRead(path);
+        var frame = BitmapFrame.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
+        var orientation = ReadExifOrientation(frame.Metadata as BitmapMetadata);
+
+        stream.Position = 0;
         var image = new BitmapImage();
         image.BeginInit();
-        image.UriSource = new Uri(path, UriKind.Absolute);
+        image.StreamSource = stream;
         image.CacheOption = BitmapCacheOption.OnLoad;
         image.CreateOptions = BitmapCreateOptions.PreservePixelFormat;
         image.EndInit();
         image.Freeze();
         var oriented = Orient(image, orientation);
         return new LoadedImage(oriented, path, oriented.PixelWidth, oriented.PixelHeight);
+    }
+
+    /// <summary>Reads only image headers and EXIF orientation, without retaining decoded pixels.</summary>
+    public static ImageFileInfo ReadInfo(string path)
+    {
+        if (!File.Exists(path)) throw new FileNotFoundException("The selected image could not be found.", path);
+        if (!IsSupportedFile(path))
+            throw new NotSupportedException("This file type is not supported. Choose JPG, PNG, BMP, or TIFF.");
+
+        using var stream = File.OpenRead(path);
+        var frame = BitmapFrame.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
+        var orientation = ReadExifOrientation(frame.Metadata as BitmapMetadata);
+        var swapsDimensions = orientation is 5 or 6 or 7 or 8;
+        return swapsDimensions
+            ? new ImageFileInfo(frame.PixelHeight, frame.PixelWidth)
+            : new ImageFileInfo(frame.PixelWidth, frame.PixelHeight);
+    }
+
+    /// <summary>Returns a frozen, bounded preview suitable for queue cards.</summary>
+    public static BitmapSource LoadThumbnail(string path, int maximumDimension = 360)
+    {
+        if (maximumDimension < 1) throw new ArgumentOutOfRangeException(nameof(maximumDimension));
+        if (!File.Exists(path)) throw new FileNotFoundException("The selected image could not be found.", path);
+        if (!IsSupportedFile(path))
+            throw new NotSupportedException("This file type is not supported. Choose JPG, PNG, BMP, or TIFF.");
+
+        using var stream = File.OpenRead(path);
+        var frame = BitmapFrame.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
+        var rawWidth = frame.PixelWidth;
+        var rawHeight = frame.PixelHeight;
+        var orientation = ReadExifOrientation(frame.Metadata as BitmapMetadata);
+
+        stream.Position = 0;
+        var image = new BitmapImage();
+        image.BeginInit();
+        image.StreamSource = stream;
+        image.CacheOption = BitmapCacheOption.OnLoad;
+        image.CreateOptions = BitmapCreateOptions.PreservePixelFormat;
+        if (Math.Max(rawWidth, rawHeight) > maximumDimension)
+        {
+            if (rawWidth >= rawHeight)
+                image.DecodePixelWidth = maximumDimension;
+            else
+                image.DecodePixelHeight = maximumDimension;
+        }
+        image.EndInit();
+        image.Freeze();
+
+        return Orient(image, orientation);
+    }
+
+    /// <summary>
+    /// Produces a bounded card preview from an item's crop recipe. The source is
+    /// decoded only at thumbnail scale; no full-resolution edited bitmap is kept.
+    /// </summary>
+    public static BitmapSource LoadCroppedThumbnail(
+        string path,
+        CropRect crop,
+        int originalWidth,
+        int originalHeight,
+        int maximumDimension = 360)
+    {
+        return LoadEditedThumbnail(path, crop, originalWidth, originalHeight, 0, false, false, maximumDimension);
+    }
+
+    /// <summary>
+    /// Produces a bounded card preview using the same crop/flip/rotation order
+    /// as final export. Only a thumbnail-scale source bitmap is decoded.
+    /// </summary>
+    public static BitmapSource LoadEditedThumbnail(
+        string path,
+        CropRect crop,
+        int originalWidth,
+        int originalHeight,
+        int netRotation,
+        bool horizontalFlip,
+        bool verticalFlip,
+        int maximumDimension = 360)
+    {
+        var preview = LoadThumbnail(path, maximumDimension);
+        if (originalWidth <= 0 || originalHeight <= 0)
+            return preview;
+
+        var previewCrop = new CropRect(
+            crop.X * preview.PixelWidth / originalWidth,
+            crop.Y * preview.PixelHeight / originalHeight,
+            crop.Width * preview.PixelWidth / originalWidth,
+            crop.Height * preview.PixelHeight / originalHeight);
+        return CropService.Render(preview, previewCrop, netRotation, horizontalFlip, verticalFlip);
+    }
+
+    public static string SaveClipboardImageToTemporaryFile(BitmapSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        var folder = Path.Combine(Path.GetTempPath(), "PrecisionImageCropper");
+        Directory.CreateDirectory(folder);
+        var path = Path.Combine(folder, $"clipboard-{Guid.NewGuid():N}.png");
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(source));
+        using var output = File.Create(path);
+        encoder.Save(output);
+        return path;
     }
 
     public static BitmapSource CopyBitmap(BitmapSource source)
@@ -42,16 +151,26 @@ public static class ImageService
         return copy;
     }
 
+    private static ushort ReadExifOrientation(BitmapMetadata? metadata)
+    {
+        try
+        {
+            if (metadata?.GetQuery("/app1/ifd/{ushort=274}") is not null)
+            {
+                return Convert.ToUInt16(metadata.GetQuery("/app1/ifd/{ushort=274}"));
+            }
+        }
+        catch { /* WPF will provide the user-facing decode error if the file is corrupt. */ }
+        return 1;
+    }
+
     private static ushort ReadExifOrientation(string path)
     {
         try
         {
             using var stream = File.OpenRead(path);
             var frame = BitmapFrame.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
-            if (frame.Metadata is BitmapMetadata metadata && metadata.GetQuery("/app1/ifd/{ushort=274}") is not null)
-            {
-                return Convert.ToUInt16(metadata.GetQuery("/app1/ifd/{ushort=274}"));
-            }
+            return ReadExifOrientation(frame.Metadata as BitmapMetadata);
         }
         catch { /* WPF will provide the user-facing decode error if the file is corrupt. */ }
         return 1;

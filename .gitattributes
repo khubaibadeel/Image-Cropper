@@ -1,0 +1,2 @@
+*.exe filter=lfs diff=lfs merge=lfs -text
+dist/PrecisionImageCropper.exe filter=lfs diff=lfs merge=lfs -text

@@ -5,6 +5,19 @@ namespace PrecisionImageCropper.Services;
 
 public static class FileDialogService
 {
+    public static string[]? OpenImages(string? initialDirectory)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Open Images",
+            InitialDirectory = initialDirectory,
+            Multiselect = true,
+            Filter = "Image files|*.jpg;*.jpeg;*.png;*.bmp;*.tif;*.tiff|JPEG image|*.jpg;*.jpeg|PNG image|*.png|Bitmap image|*.bmp|TIFF image|*.tif;*.tiff"
+        };
+
+        return dialog.ShowDialog() == true ? dialog.FileNames : null;
+    }
+
     public static string? OpenImage(string? initialDirectory)
     {
         var dialog = new OpenFileDialog
@@ -21,7 +34,7 @@ public static class FileDialogService
         var normalizedExtension = NormalizeExtension(preferredExtension);
         var dialog = new SaveFileDialog
         {
-            Title = "Save Cropped Image",
+            Title = "Save Image",
             FileName = suggestedFileName,
             DefaultExt = normalizedExtension,
             AddExtension = true,
@@ -42,6 +55,20 @@ public static class FileDialogService
         }
 
         return dialog.FileName;
+    }
+
+    public static string? SaveZip(string suggestedFileName)
+    {
+        var dialog = new SaveFileDialog
+        {
+            Title = "Save All Images as ZIP",
+            FileName = suggestedFileName,
+            DefaultExt = ".zip",
+            AddExtension = true,
+            OverwritePrompt = true,
+            Filter = "ZIP archive (*.zip)|*.zip"
+        };
+        return dialog.ShowDialog() == true ? dialog.FileName : null;
     }
 
     private static string NormalizeExtension(string? extension)

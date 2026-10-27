@@ -24,7 +24,7 @@ namespace PrecisionImageCropper
             catch (Exception ex)
             {
                 MessageBox.Show(
-                    ex.ToString(),
+                    $"The application could not start.\n\n{ex.Message}",
                     "Precision Image Cropper - Startup Error",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
@@ -38,7 +38,7 @@ namespace PrecisionImageCropper
             DispatcherUnhandledExceptionEventArgs e)
         {
             MessageBox.Show(
-                e.Exception.ToString(),
+                $"An unexpected error occurred.\n\n{e.Exception.Message}",
                 "Precision Image Cropper - Application Error",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

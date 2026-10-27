@@ -71,4 +71,14 @@ public sealed class CoordinateConverterTests
         var tiny = CropMath.ToPixelRect(new CropRect(5999.8, 3999.8, .1, .1), 6000, 4000);
         Assert.Equal(1, tiny.Width); Assert.Equal(1, tiny.Height);
     }
+
+    [Fact]
+    public void Pixel_conversion_is_safe_for_zero_dimension_bounds()
+    {
+        var rect = CropMath.ToPixelRect(new CropRect(0, 0, 10, 10), 0, 0);
+        Assert.Equal(0, rect.X);
+        Assert.Equal(0, rect.Y);
+        Assert.Equal(1, rect.Width);
+        Assert.Equal(1, rect.Height);
+    }
 }
